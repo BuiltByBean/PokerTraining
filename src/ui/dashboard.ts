@@ -1,9 +1,9 @@
 /*
- * Stats & history dashboard, written for a human, not a HUD. Money is shown in
- * dollars (not big blinds), and every stat has a plain-English name + one-line
- * explanation instead of poker shorthand (VPIP, PFR, AF, WTSD…). Percentages
- * show as soon as there's any sample; the header notes when there are still too
- * few hands to read them as a reliable "style."
+ * Play-style analytics — NOT a money tracker. No dollar amounts here: the point
+ * is to show HOW you play and where your wins come from, in plain language.
+ * Every stat has a human name + one-line explanation, and percentages show as
+ * soon as there's any sample (the header notes when there are too few hands to
+ * trust them as a "style").
  */
 
 import { computeStats, detectAggregateLeaks, type Ratio, type StatPanel } from '../analysis/index';
@@ -31,17 +31,18 @@ const RELIABLE_AT = 30;
 export function renderDashboard(opts: DashboardOptions): HTMLElement {
   const stats = computeStats(opts.records);
   const leaks = detectAggregateLeaks(opts.records, stats);
-  const money = moneyTotals(opts.records);
 
   return el('div', { class: 'dashboard' },
     el('div', { class: 'dashboard__head' },
       el('button', { class: 'modal__btn', onclick: opts.onBack }, '← Back to table'),
-      el('h2', { class: 'dashboard__title' }, 'Your Stats'),
+      el('div', { class: 'dashboard__heading' },
+        el('h2', { class: 'dashboard__title' }, 'Your Play Style'),
+        el('div', { class: 'dashboard__count' }, `Based on ${stats.hands} hand${stats.hands === 1 ? '' : 's'}`)),
       el('div', { class: 'dashboard__archetype' },
         stats.archetype ? `Your style: ${ARCHETYPE_LABEL[stats.archetype] ?? stats.archetype}`
           : `${Math.max(0, RELIABLE_AT - stats.hands)} more hands to read your style`)),
 
-    overview(stats.hands, money),
+    winSource(opts.records),
     style(stats),
 
     leaks.length
@@ -59,37 +60,28 @@ export function renderDashboard(opts: DashboardOptions): HTMLElement {
   );
 }
 
-// ── overview (always meaningful) ──────────────────────────────────────────
+// ── where your wins come from (skill vs. fold equity), as % of wins ────────
 
-interface Money { net: number; showdown: number; steal: number; }
-
-function moneyTotals(records: readonly HandRecord[]): Money {
-  let net = 0, showdown = 0;
-  for (const r of records) {
-    net += r.outcome.heroNet;
-    if (r.outcome.heroWentToShowdown) showdown += r.outcome.heroNet;
-  }
-  return { net, showdown, steal: net - showdown };
+function winSource(records: readonly HandRecord[]): HTMLElement {
+  const wins = records.filter(r => r.outcome.heroNet > 0);
+  const body = wins.length === 0
+    ? el('p', { class: 'dashboard__none' }, 'No wins yet — this fills in once you start taking pots.')
+    : el('div', { class: 'statlist' },
+        statRow('Won by having the best hand', sharePct(wins, 'blue', wins.length),
+          'You went to the end and won the showdown — winning on merit.'),
+        statRow('Won because everyone folded', sharePct(wins, 'red', wins.length),
+          'You took the pot without a showdown — bluffs and steals, not necessarily the best hand.'));
+  return el('section', { class: 'dashboard__winsrc' },
+    el('h3', { class: 'dashboard__subtitle' }, 'Where your wins come from'),
+    body);
 }
 
-function overview(hands: number, m: Money): HTMLElement {
-  return el('section', { class: 'dashboard__overview' },
-    bigTile('Hands played', String(hands), ''),
-    bigTile('Total won / lost', dollars(m.net), '', m.net),
-    bigTile('From showdowns', dollars(m.showdown), 'hands you took to the end', m.showdown),
-    bigTile('From folds / steals', dollars(m.steal), 'pots won without a showdown (or lost folding)', m.steal),
-  );
+function sharePct(wins: readonly HandRecord[], line: 'blue' | 'red', total: number): string {
+  const n = wins.filter(w => w.outcome.line === line).length;
+  return `${Math.round((n / total) * 100)}%`;
 }
 
-function bigTile(label: string, value: string, sub: string, signedVal = 0): HTMLElement {
-  const cls = signedVal > 0 ? 'tile__value tile__value--win' : signedVal < 0 ? 'tile__value tile__value--loss' : 'tile__value';
-  return el('div', { class: 'tile' },
-    el('div', { class: cls }, value),
-    el('div', { class: 'tile__label' }, label),
-    sub ? el('div', { class: 'tile__sub' }, sub) : null);
-}
-
-// ── playing style (percentages, plain-language) ───────────────────────────
+// ── how you play (behavioral percentages) ──────────────────────────────────
 
 function style(s: StatPanel): HTMLElement {
   const rows = [
@@ -135,23 +127,17 @@ function history(opts: DashboardOptions): HTMLElement {
 function historyRow(r: HandRecord, opts: DashboardOptions): HTMLElement {
   const hole = (r.holeCards[r.config.humanId] ?? []) as Card[];
   const net = r.outcome.heroNet;
+  const result = net > 0 ? 'Won' : net < 0 ? 'Lost' : 'Folded';
   const cls = net > 0 ? 'history__net--win' : net < 0 ? 'history__net--loss' : '';
   const tag = TAG_LABEL[r.outcome.line];
   return el('div', { class: 'history__row', onclick: () => opts.onReplay(r) },
     el('div', { class: 'history__cards board' }, ...hole.map(c => renderCard(c, { small: true }))),
     tag ? el('span', { class: `history__tag history__tag--${r.outcome.line}` }, tag) : el('span', {}),
-    el('span', { class: `history__net ${cls}` }, dollars(net)),
+    el('span', { class: `history__net ${cls}` }, result),
     el('span', { class: 'history__open' }, 'review →'));
 }
-
-// ── formatting ────────────────────────────────────────────────────────────
 
 /** Percentage straight from hits/opps so something shows even with few hands. */
 function pctRaw(r: Ratio): string {
   return r.opps > 0 ? `${Math.round((r.hits / r.opps) * 100)}%` : '—';
-}
-
-function dollars(n: number): string {
-  const sign = n > 0 ? '+' : n < 0 ? '−' : '';
-  return `${sign}$${Math.abs(n).toLocaleString()}`;
 }

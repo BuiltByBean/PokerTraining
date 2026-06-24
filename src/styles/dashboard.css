@@ -31,25 +31,8 @@
   font-weight: var(--fw-medium);
 }
 
-.dashboard__overview {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--sp-3);
-}
-
-.tile {
-  background: var(--c-bg-elev);
-  border: 1px solid #0c1c16;
-  border-radius: var(--r-md);
-  padding: var(--sp-4);
-  text-align: center;
-}
-
-.tile__value { font-family: var(--font-num); font-size: var(--fs-2xl); color: var(--c-text); }
-.tile__value--win { color: var(--c-good); }
-.tile__value--loss { color: #e8867c; }
-.tile__label { font-size: var(--fs-sm); color: var(--c-text); margin-top: 6px; }
-.tile__sub { font-size: var(--fs-xs); color: var(--c-text-faint); margin-top: 4px; }
+.dashboard__heading { display: flex; flex-direction: column; gap: 2px; }
+.dashboard__count { font-size: var(--fs-sm); color: var(--c-text-faint); }
 
 .dashboard__subtitle { margin: 0 0 var(--sp-2); font-size: var(--fs-md); color: var(--c-text-dim); }
 
