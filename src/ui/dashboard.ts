@@ -52,22 +52,22 @@ export function renderDashboard(opts: DashboardOptions): HTMLElement {
 
 function tiles(s: StatPanel): HTMLElement {
   return el('div', { class: 'dashboard__tiles' },
-    tile('Hands', String(s.hands)),
-    tile('Net (bb)', signed(s.netBb)),
-    tile('VPIP', pct(s.vpip)),
-    tile('PFR', pct(s.pfr)),
-    tile('3-Bet', pct(s.threeBet)),
-    tile('AF', s.af === undefined ? '—' : s.af.toFixed(1)),
-    tile('WTSD', pct(s.wtsd)),
-    tile('W$SD', pct(s.wssd)),
-    tile('WWSF', pct(s.wwsf)),
-    tile('Red line', signed(s.redLineBb)),
-    tile('Blue line', signed(s.blueLineBb)),
+    tile('Hands', String(s.hands), 'Total hands played'),
+    tile('Net (bb)', signed(s.netBb), 'Overall winnings, in big blinds'),
+    tile('VPIP', pct(s.vpip), 'How often you play a hand instead of folding'),
+    tile('PFR', pct(s.pfr), 'How often you raise before the flop'),
+    tile('3-Bet', pct(s.threeBet), 'How often you re-raise before the flop'),
+    tile('AF', s.af === undefined ? '—' : s.af.toFixed(1), 'How aggressive you are after the flop (bets+raises per call)'),
+    tile('WTSD', pct(s.wtsd), 'How often you reach showdown after seeing the flop'),
+    tile('W$SD', pct(s.wssd), 'How often you win once you reach showdown'),
+    tile('WWSF', pct(s.wwsf), 'How often you win after seeing the flop'),
+    tile('Red line', signed(s.redLineBb), 'Money won/lost in pots that never reached showdown'),
+    tile('Blue line', signed(s.blueLineBb), 'Money won/lost in pots that did reach showdown'),
   );
 }
 
-function tile(label: string, value: string): HTMLElement {
-  return el('div', { class: 'tile' },
+function tile(label: string, value: string, hint: string): HTMLElement {
+  return el('div', { class: 'tile', title: hint },
     el('div', { class: 'tile__value' }, value),
     el('div', { class: 'tile__label' }, label));
 }

@@ -5,7 +5,7 @@
  * plus analyzeHand — no engine re-run needed, so it works for any saved hand.
  */
 
-import { analyzeHand } from '../analysis/index';
+import { analyzeHand, verdictLabel } from '../analysis/index';
 import type { HandRecord } from '../analysis/record';
 import type { Card } from '../engine/types';
 import { renderCard } from './cards';
@@ -54,7 +54,7 @@ function panelContent(a: ReturnType<typeof analyzeHand>): HTMLElement {
       el('div', { class: 'decision__head' },
         el('span', { class: 'decision__street' }, g.snapshot.street),
         el('span', { class: 'decision__act' }, g.snapshot.action.kind),
-        el('span', { class: `verdict verdict--${g.verdict}` }, g.verdict)),
+        el('span', { class: `verdict verdict--${g.verdict}` }, verdictLabel(g.verdict))),
       el('div', { class: 'decision__note' }, g.note)));
   const leaks = a.leaks.map(l =>
     el('div', { class: `leak leak--${l.severity}` },
@@ -63,12 +63,12 @@ function panelContent(a: ReturnType<typeof analyzeHand>): HTMLElement {
   return el('div', { class: 'panel__body' },
     el('p', { class: 'panel__summary' }, a.summary),
     el('h4', { class: 'panel__subtitle' }, 'Your decisions'), ...grades,
-    leaks.length ? el('h4', { class: 'panel__subtitle' }, 'Leaks flagged') : null, ...leaks);
+    leaks.length ? el('h4', { class: 'panel__subtitle' }, 'What to watch for') : null, ...leaks);
 }
 
 function describeResult(r: HandRecord): string {
-  const net = r.outcome.heroNetBb;
-  if (net > 0) return `You won ${fmtMoney(r.outcome.heroNet)} (+${net.toFixed(1)}bb)`;
-  if (net < 0) return `You lost ${fmtMoney(-r.outcome.heroNet)} (${net.toFixed(1)}bb)`;
+  const net = r.outcome.heroNet;
+  if (net > 0) return `You won ${fmtMoney(net)}`;
+  if (net < 0) return `You lost ${fmtMoney(-net)}`;
   return 'Break-even hand';
 }

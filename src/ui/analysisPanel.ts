@@ -5,7 +5,7 @@
  * an equity strip, and the leak flags.
  */
 
-import type { HandAnalysis } from '../analysis/index';
+import { verdictLabel, type HandAnalysis } from '../analysis/index';
 import type { DecisionGrade } from '../analysis/decision';
 import type { Leak } from '../analysis/leaks';
 import { el } from './dom';
@@ -16,9 +16,9 @@ export interface AnalysisPanelOptions {
 }
 
 const TAG_LABEL: Record<HandAnalysis['tag'], string> = {
-  red: 'Won without showdown (fold equity)',
-  blue: 'Won at showdown',
-  none: 'No pot won',
+  red: 'You won because everyone folded',
+  blue: 'You won with the best hand',
+  none: "You didn't win this pot",
 };
 
 export function renderAnalysisPanel(opts: AnalysisPanelOptions): HTMLElement {
@@ -33,8 +33,8 @@ export function renderAnalysisPanel(opts: AnalysisPanelOptions): HTMLElement {
       equityStrip(a),
       section('Your decisions', a.grades.map(decisionRow)),
       a.leaks.length
-        ? section('Leaks flagged', a.leaks.map(leakRow))
-        : el('p', { class: 'panel__clean' }, 'No leaks flagged this hand. 👍'),
+        ? section('What to watch for', a.leaks.map(leakRow))
+        : el('p', { class: 'panel__clean' }, 'Nothing to flag this hand — nicely played. 👍'),
     ),
   );
 }
@@ -45,7 +45,7 @@ function equityStrip(a: HandAnalysis): HTMLElement {
     el('div', { class: 'eqbar', title: `${pt.street}: ${Math.round(pt.equity * 100)}%` },
       el('div', { class: 'eqbar__fill', style: `height:${Math.round(pt.equity * 100)}%` })));
   return el('div', { class: 'panel__equity' },
-    el('div', { class: 'panel__equity-label' }, 'Your equity at each decision'),
+    el('div', { class: 'panel__equity-label' }, 'Your chance of winning at each decision'),
     el('div', { class: 'eqstrip' }, ...bars));
 }
 
@@ -57,7 +57,7 @@ function decisionRow(g: DecisionGrade): HTMLElement {
     el('div', { class: 'decision__head' },
       el('span', { class: 'decision__street' }, s.street),
       el('span', { class: 'decision__act' }, act),
-      el('span', { class: `verdict verdict--${g.verdict}` }, g.verdict)),
+      el('span', { class: `verdict verdict--${g.verdict}` }, verdictLabel(g.verdict))),
     el('div', { class: 'decision__note' }, g.note));
 }
 

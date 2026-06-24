@@ -7,11 +7,12 @@
 
 import { mulberry32, type Rng } from '../engine/rng';
 import type { Street } from '../engine/types';
-import { gradeHand, type DecisionGrade } from './decision';
+import { gradeHand, verdictLabel, type DecisionGrade } from './decision';
 import { detectHandLeaks, type Leak } from './leaks';
 import type { HandRecord } from './record';
 
 export type { DecisionGrade, Verdict } from './decision';
+export { verdictLabel } from './decision';
 export type { Leak, Severity } from './leaks';
 export type { StatPanel, Ratio, Archetype } from './stats';
 export { computeStats } from './stats';
@@ -49,11 +50,14 @@ function summarize(record: HandRecord, grades: readonly DecisionGrade[], leaks: 
   const severe = leaks.find(l => l.severity === 'severe');
   if (severe) return severe.title;
   const worst = [...grades].sort((a, b) => b.evLossBb - a.evLossBb)[0];
-  if (worst && worst.evLossBb >= 0.5) return `Biggest error: ${worst.verdict} (−${worst.evLossBb.toFixed(1)}bb)`;
-  const net = record.outcome.heroNetBb;
-  if (net > 0) return `Clean hand — won ${net.toFixed(1)}bb${record.outcome.line === 'red' ? ' without showdown' : ''}.`;
-  if (net < 0) return `Lost ${Math.abs(net).toFixed(1)}bb, no clear mistakes.`;
-  return 'No notable decisions.';
+  if (worst && worst.evLossBb >= 0.5) {
+    const cost = Math.round(worst.evLossBb * record.config.bigBlind);
+    return `Your biggest slip: a ${verdictLabel(worst.verdict).toLowerCase()} that cost you about $${cost}.`;
+  }
+  const net = record.outcome.heroNet;
+  if (net > 0) return `Nice — you won $${net}${record.outcome.line === 'red' ? ' because everyone folded.' : '.'}`;
+  if (net < 0) return `You lost $${Math.abs(net)}, but no clear mistakes — that's poker.`;
+  return 'Nothing notable this hand.';
 }
 
 /** Cheap deterministic string hash → seed, so analysis is reproducible. */

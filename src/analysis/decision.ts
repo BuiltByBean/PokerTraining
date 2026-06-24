@@ -63,8 +63,8 @@ function gradeCall(snap: DecisionSnapshot, eq: number, reqEq: number, bb: number
   const ev = evCall(eq, snap.potBefore, toCall);
   const evLossBb = Math.max(0, -ev) / bb;
   const note = ev >= 0
-    ? `Profitable call in hindsight — ${pct(eq)} equity vs the ${pct(reqEq)} the price needed.`
-    : `Called ${toCall} needing ${pct(reqEq)} but had only ${pct(eq)} (hindsight) — you were behind.`;
+    ? `Good call — your hand had about a ${pct(eq)} chance to win, and you only needed ${pct(reqEq)} for the call to be worth it.`
+    : `Loose call — you put in ${toCall} chips with about a ${pct(eq)} chance to win, but needed roughly ${pct(reqEq)} to make it worth it. You were behind.`;
   return { snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: ev, evLossBb, verdict: verdictFor(evLossBb), note };
 }
 
@@ -72,15 +72,15 @@ function gradeFold(snap: DecisionSnapshot, eq: number, reqEq: number, toCall: nu
   const wouldHaveBeen = evCall(eq, snap.potBefore, toCall);
   const evLossBb = Math.max(0, wouldHaveBeen) / bb;
   const note = wouldHaveBeen > 0
-    ? `Folded a call that was +EV in hindsight (${pct(eq)} vs ${pct(reqEq)} needed) — too tight here.`
-    : `Sound fold — ${pct(eq)} equity didn't justify the ${pct(reqEq)} price.`;
+    ? `Too tight — calling would have made money. Your hand had about a ${pct(eq)} chance to win and you only needed ${pct(reqEq)} to call.`
+    : `Good fold — only about a ${pct(eq)} chance to win, not enough to call the ${pct(reqEq)} price.`;
   return { snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: 0, evLossBb, verdict: verdictFor(evLossBb), note };
 }
 
 function gradeCheck(snap: DecisionSnapshot, eq: number, reqEq: number): DecisionGrade {
   const note = eq > 0.8 && snap.board.length >= 3
-    ? `Checked a very strong hand (${pct(eq)}) — likely missed value.`
-    : `Check.`;
+    ? `You checked a strong hand (~${pct(eq)} chance to win) — betting probably would have won you more.`
+    : `Checked.`;
   return { snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: 0, evLossBb: 0, verdict: 'correct', note };
 }
 
@@ -89,11 +89,11 @@ function gradeAggressive(snap: DecisionSnapshot, eq: number, reqEq: number): Dec
   // EV loss here — we label intent. leaks.ts catches reckless bluffs.
   let note: string;
   let verdict: Verdict = 'correct';
-  if (eq >= 0.6) note = `Value bet/raise — ${pct(eq)} ahead in hindsight.`;
+  if (eq >= 0.6) note = `Strong bet — you likely had the best hand (~${pct(eq)} chance to win), betting to get paid.`;
   else if (eq < 0.3) {
-    note = `Bluff (${pct(eq)} equity) — profit depends entirely on folds.`;
+    note = `A bluff — only about a ${pct(eq)} chance to win, so this only works if they fold.`;
     verdict = 'marginal';
-  } else note = `Thin bet/raise — ${pct(eq)} equity, a value-bluff mix.`;
+  } else note = `A thin bet — roughly a coin flip (~${pct(eq)} chance to win), part value and part bluff.`;
   return { snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: 0, evLossBb: 0, verdict, note };
 }
 
@@ -116,6 +116,18 @@ function verdictFor(evLossBb: number): Verdict {
   if (evLossBb < 0.5) return 'marginal';
   if (evLossBb <= 2) return 'mistake';
   return 'blunder';
+}
+
+const VERDICT_LABEL: Record<Verdict, string> = {
+  correct: 'Good',
+  marginal: 'Borderline',
+  mistake: 'Mistake',
+  blunder: 'Big mistake',
+};
+
+/** Plain-English label for a verdict, for the UI chips. */
+export function verdictLabel(v: Verdict): string {
+  return VERDICT_LABEL[v];
 }
 
 function pct(fraction: number): string {

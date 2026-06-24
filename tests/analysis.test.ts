@@ -81,7 +81,7 @@ describe('decision grading', () => {
     });
     const [g] = gradeHand(r, rng());
     expect(g?.verdict === 'mistake' || g?.verdict === 'blunder').toBe(true);
-    expect(g?.note.toLowerCase()).toContain('folded');
+    expect(g?.note.toLowerCase()).toContain('too tight');
   });
 });
 
