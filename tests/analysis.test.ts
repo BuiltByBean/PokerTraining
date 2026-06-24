@@ -83,6 +83,16 @@ describe('decision grading', () => {
     expect(g?.verdict === 'mistake' || g?.verdict === 'blunder').toBe(true);
     expect(g?.note.toLowerCase()).toContain('too tight');
   });
+
+  it('calls out folding a hand that could be checked for free', () => {
+    const r = record({
+      hole: { P0: 'Ah Ad', P1: '2c 7d' },
+      board: 'As 9h 4c 5s Jd',
+      snapshots: [snap({ action: { kind: 'fold', amount: 0 }, street: 'river', board: cards('As 9h 4c 5s Jd'), potBefore: 100, betFaced: 0, amountPutIn: 0, currentBet: 0 })],
+    });
+    const [g] = gradeHand(r, rng());
+    expect(g?.note.toLowerCase()).toContain('for free');
+  });
 });
 
 describe('leak detection', () => {

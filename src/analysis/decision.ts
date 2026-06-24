@@ -71,9 +71,11 @@ function gradeCall(snap: DecisionSnapshot, eq: number, reqEq: number, bb: number
 function gradeFold(snap: DecisionSnapshot, eq: number, reqEq: number, toCall: number, bb: number): DecisionGrade {
   const wouldHaveBeen = evCall(eq, snap.potBefore, toCall);
   const evLossBb = Math.max(0, wouldHaveBeen) / bb;
-  const note = wouldHaveBeen > 0
-    ? `Too tight — calling would have made money. Your hand had about a ${pct(eq)} chance to win and you only needed ${pct(reqEq)} to call.`
-    : `Good fold — only about a ${pct(eq)} chance to win, not enough to call the ${pct(reqEq)} price.`;
+  const note = snap.betFaced === 0
+    ? `You folded a hand you could have seen for free — nobody had bet, so checking cost nothing. Never fold when you can check.`
+    : wouldHaveBeen > 0
+      ? `Too tight — calling would have made money. Your hand had about a ${pct(eq)} chance to win and you only needed ${pct(reqEq)} to call.`
+      : `Good fold — only about a ${pct(eq)} chance to win, not enough to call the ${pct(reqEq)} price.`;
   return { snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: 0, evLossBb, verdict: verdictFor(evLossBb), note };
 }
 
