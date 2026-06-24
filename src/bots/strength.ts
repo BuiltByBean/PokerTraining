@@ -13,6 +13,7 @@
  */
 
 import { evaluate } from '../engine/evaluator';
+import { hasFlushDraw, hasOpenEnder } from '../analysis/draws';
 import type { Card, Rank } from '../engine/types';
 
 export interface Strength {
@@ -77,8 +78,8 @@ export function postflopStrength(
 
   // Draw bonuses, only on flop/turn (river has no draws).
   if (board.length < 5) {
-    if (hasFlushDraw(hole, board)) score = Math.max(score, 0.55);
-    if (hasOpenEnder(hole, board)) score = Math.max(score, 0.5);
+    if (hasFlushDraw([...hole, ...board])) score = Math.max(score, 0.55);
+    if (hasOpenEnder([...hole, ...board])) score = Math.max(score, 0.5);
   }
 
   return { score, label: labelFor(score) };
@@ -120,22 +121,3 @@ function pairRankIn(cards: readonly Card[]): Rank | undefined {
   return undefined;
 }
 
-function hasFlushDraw(hole: readonly Card[], board: readonly Card[]): boolean {
-  const counts = new Map<Card['suit'], number>();
-  for (const c of [...hole, ...board]) counts.set(c.suit, (counts.get(c.suit) ?? 0) + 1);
-  for (const n of counts.values()) if (n === 4) return true;
-  return false;
-}
-
-function hasOpenEnder(hole: readonly Card[], board: readonly Card[]): boolean {
-  const ranks = new Set<number>();
-  for (const c of [...hole, ...board]) ranks.add(c.rank);
-  if (ranks.has(14)) ranks.add(1); // ace-low for wheel draws
-  // 4 consecutive ranks with a card both above and below.
-  for (let lo = 2; lo <= 10; lo++) {
-    if (ranks.has(lo) && ranks.has(lo + 1) && ranks.has(lo + 2) && ranks.has(lo + 3)) {
-      return true;
-    }
-  }
-  return false;
-}

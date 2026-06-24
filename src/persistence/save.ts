@@ -10,6 +10,7 @@
 
 const KEY = 'pt.save.v0';
 const RECORD_KEY = 'pt.record.v0';
+const CONFIG_KEY = 'pt.config.v1';
 
 export interface SaveData {
   /** Per-player stacks keyed by player id (P0..P4). */
@@ -19,7 +20,43 @@ export interface SaveData {
   readonly handNumber: number;
 }
 
+/** Table setup the player chose, persisted across sessions. */
+export interface GameConfig {
+  /** Total seats including the human, 2-9. */
+  readonly playerCount: number;
+  /** Bot difficulty, 1 (calling station) to 10 (crusher). */
+  readonly difficulty: number;
+  /** Training aid: show opponents' hole cards face-up the whole hand. */
+  readonly revealOpponents: boolean;
+}
+
 const DEFAULT: SaveData = { stacks: {}, dealerIndex: 0, handNumber: 0 };
+export const DEFAULT_CONFIG: GameConfig = { playerCount: 5, difficulty: 5, revealOpponents: false };
+
+export function loadConfig(): GameConfig {
+  try {
+    const raw = localStorage.getItem(CONFIG_KEY);
+    if (!raw) return DEFAULT_CONFIG;
+    const p = JSON.parse(raw) as Partial<GameConfig>;
+    return {
+      playerCount: clamp(p.playerCount ?? DEFAULT_CONFIG.playerCount, 2, 9),
+      difficulty: clamp(p.difficulty ?? DEFAULT_CONFIG.difficulty, 1, 10),
+      revealOpponents: p.revealOpponents ?? DEFAULT_CONFIG.revealOpponents,
+    };
+  } catch {
+    return DEFAULT_CONFIG;
+  }
+}
+
+export function saveConfig(config: GameConfig): void {
+  try {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  } catch { /* ignore */ }
+}
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, Math.round(n)));
+}
 
 export function loadSave(): SaveData {
   try {

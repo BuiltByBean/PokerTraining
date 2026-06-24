@@ -16,6 +16,7 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   for (const [k, v] of Object.entries(attrs)) {
     if (v === undefined || v === false) continue;
     if (k === 'class') node.className = String(v);
+    else if (k === 'style') node.setAttribute('style', String(v));
     else if (k.startsWith('data-')) node.setAttribute(k, String(v));
     else if (k.startsWith('aria-')) node.setAttribute(k, String(v));
     else if (k === 'html') node.innerHTML = String(v);

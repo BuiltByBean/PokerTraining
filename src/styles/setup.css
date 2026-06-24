@@ -1,0 +1,84 @@
+/* Pre-game setup modal — stepper, difficulty slider, reveal toggle. */
+
+.setup {
+  min-width: 420px;
+  max-width: 92vw;
+  gap: var(--sp-5);
+}
+
+.setup__field {
+  display: grid;
+  gap: var(--sp-2);
+  text-align: left;
+}
+
+.setup__label {
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.setup__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+.setup__value {
+  font-family: var(--font-num);
+  font-size: var(--fs-xl);
+  color: var(--c-accent);
+  min-width: 2ch;
+  text-align: center;
+}
+
+.setup__stepper {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.setup__step {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-md);
+  background: var(--c-btn);
+  border: 1px solid var(--c-btn-border);
+  color: var(--c-text);
+  font-size: var(--fs-lg);
+  cursor: pointer;
+}
+
+.setup__step:hover { background: var(--c-btn-hover); }
+
+.setup__slider { flex: 1; }
+
+.setup__diff {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 110px;
+}
+
+.setup__word {
+  font-size: var(--fs-sm);
+  color: var(--c-text-dim);
+}
+
+.setup__toggle {
+  align-self: flex-start;
+  min-width: 80px;
+  height: 40px;
+  border-radius: var(--r-pill);
+  background: var(--c-btn);
+  border: 1px solid var(--c-btn-border);
+  color: var(--c-text-dim);
+  cursor: pointer;
+  font-weight: var(--fw-medium);
+}
+
+.setup__toggle--on {
+  background: var(--c-good);
+  border-color: var(--c-good);
+  color: #07130b;
+}

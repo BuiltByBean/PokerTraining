@@ -13,11 +13,21 @@ tool. Single-table No-Limit Hold'em vs. AI bots. Pure client-side; no backend ye
 ```
 src/
   engine/       pure poker logic — no DOM, no I/O, no globals
-  bots/         AI personalities; each is `(state) => Action`
-  ui/           DOM rendering + event wiring
-  persistence/  thin localStorage wrappers
+                (incl. equity.ts Monte-Carlo/exact equity, odds.ts pot-odds/EV math,
+                 positions.ts blind/position derivation)
+  bots/         AI personalities; each is `(ctx) => Action`. skill.ts maps the
+                1-10 difficulty to a SkillProfile the bot reads.
+  analysis/     hand recording + leak detection. recorder.ts snapshots each
+                decision (external observer over getState — engine stays pure),
+                record.ts is the immutable HandRecord, decision.ts grades each
+                decision, leaks.ts flags mistakes, stats.ts aggregates HUD stats,
+                index.ts exposes analyzeHand().
+  ui/           DOM rendering + event wiring (table, setup, dashboard, replay,
+                analysisPanel)
+  persistence/  thin localStorage wrappers (save.ts = config/stacks/record,
+                history.ts = capped 1000-hand ring buffer)
   styles/       design tokens + hand-rolled CSS
-tests/          vitest; covers engine end-to-end (unit + integration)
+tests/          vitest; covers engine + analysis end-to-end (unit + integration)
 ```
 
 ## House rules
@@ -47,9 +57,15 @@ tests/          vitest; covers engine end-to-end (unit + integration)
 - Side effects inside reducers / state transitions.
 - Animations that block input. Action UI must be responsive even mid-deal.
 
-## Not in v1 (intentional)
-- Multi-table, multi-player, networking.
-- Tournament structures.
-- Hand history viewer / equity calculator (these are the *training* features
-  this site will eventually exist for; v1 is the playable base they hang off).
+## In v2 (the training layer)
+- Configurable table: 2-9 players, difficulty 1-10, reveal-opponents toggle.
+- Watch the runout after folding (spectate) + see opponents' cards.
+- Every hand recorded, graded, and leak-checked. Per-hand coaching panel
+  ("you had no business there", "won on a fold not merit", "false security"),
+  lifetime HUD stats + archetype, and a hand-history browser with review.
+
+## Not yet (intentional)
+- Multi-table, networking, tournament structures.
+- Full GTO/solver EV-loss vs ranges (we lead with exact hindsight-vs-actual
+  equity + a heuristic decision grade; range modelling is a future upgrade).
 - Accounts, auth, server.

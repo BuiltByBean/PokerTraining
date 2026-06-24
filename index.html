@@ -27,11 +27,19 @@
     <link rel="stylesheet" href="/src/styles/cards.css" />
     <link rel="stylesheet" href="/src/styles/actions.css" />
     <link rel="stylesheet" href="/src/styles/overlay.css" />
+    <link rel="stylesheet" href="/src/styles/setup.css" />
+    <link rel="stylesheet" href="/src/styles/analysis.css" />
+    <link rel="stylesheet" href="/src/styles/dashboard.css" />
   </head>
   <body>
     <div id="app" class="app">
       <header class="app__header">
         <h1 class="app__title">Poker <span>Training</span></h1>
+        <nav class="app__nav">
+          <button class="nav-btn" id="nav-table">Table</button>
+          <button class="nav-btn" id="nav-stats">Stats</button>
+          <button class="nav-btn" id="nav-setup">New table</button>
+        </nav>
         <div class="app__meta">
           <span class="record" id="record">Record $0</span>
           <button class="icon-btn" id="sound-toggle" aria-label="Toggle sound">♪</button>

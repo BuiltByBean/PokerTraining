@@ -10,16 +10,18 @@
 
 import type { Action, BotView } from '../engine/types';
 import type { Rng } from '../engine/rng';
+import type { SkillProfile } from './skill';
 
 export interface BotContext {
   readonly view: BotView;
   readonly rng: Rng;
+  /** Difficulty-derived dials; the table level sets it, jittered per seat. */
+  readonly skill: SkillProfile;
 }
 
 export type Bot = (ctx: BotContext) => Action;
 
 export interface BotPersona {
   readonly name: string;
-  readonly difficulty: 'easy' | 'medium' | 'hard' | 'expert';
   readonly bot: Bot;
 }

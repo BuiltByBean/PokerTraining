@@ -53,39 +53,3 @@ function headlineFor(winners: readonly string[], humanId: string, nameFor: (id: 
   if (winners[0] === humanId) return 'You Win!';
   return `${nameFor(winners[0] as string)} Wins`;
 }
-
-// ── welcome / new-hand modal ────────────────────────────────────────────────
-
-export interface WelcomeOptions {
-  readonly hasSave: boolean;
-  readonly savedStack?: number;
-  readonly onNewGame: () => void;
-  readonly onResume?: () => void;
-}
-
-export function renderWelcome(opts: WelcomeOptions): HTMLElement {
-  return el(
-    'div',
-    { class: 'modal' },
-    el(
-      'div',
-      { class: 'modal__card' },
-      el('h2', { class: 'modal__title' }, 'Poker Training'),
-      el('div', { class: 'modal__sub' },
-        opts.hasSave && opts.savedStack !== undefined
-          ? `You have a saved game at ${fmtMoney(opts.savedStack)}.`
-          : 'Single-table No-Limit Hold’em vs. 4 bots.'),
-      el(
-        'div',
-        { class: 'modal__actions' },
-        opts.hasSave && opts.onResume
-          ? el('button', { class: 'modal__btn modal__btn--primary', onclick: opts.onResume }, 'Resume')
-          : null,
-        el('button', {
-          class: opts.hasSave ? 'modal__btn' : 'modal__btn modal__btn--primary',
-          onclick: opts.onNewGame,
-        }, 'New Game'),
-      ),
-    ),
-  );
-}

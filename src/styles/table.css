@@ -1,11 +1,8 @@
 /*
- * The table. A single rounded "felt" element with seats absolutely
- * positioned around it. Positions are tuned for 5 seats (1 human + 4 bots) —
- * if seat count ever varies we'd move to polar coordinates, but for v1 the
- * absolute layout reads cleaner.
- *
- * Sizing strategy: the felt is sized in vmin so it scales with the smaller
- * dimension and remains a sensible oval on phones and ultrawide alike.
+ * The table. A single rounded "felt" element with seats absolutely positioned
+ * around it. Seat coordinates are computed in TS (seating.ts) and passed as
+ * inline left%/top%, so any count 2-9 lays out without per-count CSS. The
+ * --seat-scale custom prop shrinks plates/cards when the table is crowded.
  */
 
 .table {
@@ -15,6 +12,7 @@
   place-items: center;
   padding: var(--sp-5);
   user-select: none;
+  --seat-scale: 1;
 }
 
 .table__felt {
@@ -39,16 +37,9 @@
 
 .pot {
   display: grid;
-  grid-template-rows: auto auto auto;
   justify-items: center;
   gap: var(--sp-2);
-  margin-top: -8%;
-}
-
-.pot__chips {
-  display: flex;
-  gap: -10px;
-  height: 24px;
+  margin-top: -6%;
 }
 
 .pot__label {
@@ -64,36 +55,24 @@
   gap: var(--sp-2);
 }
 
+/* Seats — position from inline left/top, scaled by crowding. */
 .seat {
   position: absolute;
-  width: 200px;
+  transform: translate(-50%, -50%) scale(var(--seat-scale));
+  transform-origin: center;
+  width: 180px;
   display: grid;
-  grid-template-areas:
-    'cards cards'
-    'plate plate'
-    'chips chips'
-    'bubble bubble';
-  grid-template-columns: 1fr auto;
-  gap: var(--sp-1);
   justify-items: center;
+  gap: var(--sp-1);
 }
 
-/* Seat positions. seat-0 = "You" at the bottom; bots arc above. */
-.seat--0 { left: 50%;  bottom: 4%;  transform: translateX(-50%); }
-.seat--1 { left: 6%;   bottom: 14%; }
-.seat--2 { left: 8%;   top: 14%; }
-.seat--3 { right: 8%;  top: 14%; }
-.seat--4 { right: 6%;  bottom: 14%; }
-
 .seat__cards {
-  grid-area: cards;
   display: flex;
-  gap: -18px;
   height: 88px;
 }
 
 .seat__plate {
-  grid-area: plate;
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -118,22 +97,41 @@
   letter-spacing: .02em;
 }
 
-.seat--you .seat__plate {
-  background: var(--c-you-plate);
-  color: #1a1a1a;
-}
+.seat--you .seat__plate { background: var(--c-you-plate); }
 .seat--you .seat__name,
-.seat--you .seat__stack {
-  color: #1a1a1a;
+.seat--you .seat__stack { color: #1a1a1a; }
+
+.seat__commit {
+  font-family: var(--font-num);
+  font-size: var(--fs-sm);
+  color: var(--c-accent);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .6);
 }
 
-.seat__chips {
-  grid-area: chips;
-  height: 16px;
+/* Dealer / blind badges — distinct colors so they read at a glance. */
+.seat__badge {
+  position: absolute;
+  right: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 24px;
+  height: 24px;
+  padding: 0 5px;
+  border-radius: var(--r-pill);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: var(--fw-bold);
+  letter-spacing: .02em;
+  color: #1a1a1a;
+  box-shadow: var(--shadow-1);
 }
+
+.seat__badge--d { background: #ffffff; color: var(--c-danger); }
+.seat__badge--sb { background: var(--c-info); color: #07121d; }
+.seat__badge--bb { background: var(--c-accent-strong); color: #1a1410; }
 
 .seat__bubble {
-  grid-area: bubble;
   background: var(--c-bubble);
   color: var(--c-bubble-text);
   padding: 2px var(--sp-2);
@@ -145,29 +143,14 @@
   transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
   white-space: nowrap;
   box-shadow: var(--shadow-1);
+  min-height: 1.4em;
 }
+
 .seat__bubble--show {
   opacity: 1;
   transform: translateY(0);
 }
 
-.seat__dealer {
-  position: absolute;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: white;
-  color: #c0392b;
-  font-weight: var(--fw-bold);
-  font-size: 14px;
-  display: grid;
-  place-items: center;
-  box-shadow: var(--shadow-1);
-  right: -10px;
-  top: 80px;
-}
-
-/* Faint ring around the seat whose turn it is. */
 .seat--toact::before {
   content: '';
   position: absolute;
@@ -183,22 +166,11 @@
   50%      { opacity: 1; }
 }
 
-.seat--folded {
-  opacity: 0.45;
-  filter: saturate(0.5);
-}
+.seat--folded { opacity: 0.4; filter: saturate(0.5); }
+.seat--out { opacity: 0.25; }
 
-.seat__commit {
-  position: absolute;
-  font-family: var(--font-num);
-  font-size: var(--fs-sm);
-  color: var(--c-accent);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, .6);
+@media (max-width: 620px) {
+  .seat { width: 130px; }
+  .seat__plate { min-width: 84px; }
+  .pot__label { font-size: var(--fs-xl); }
 }
-
-/* Per-seat commit chip position — points toward the middle of the table. */
-.seat--0 .seat__commit { top: -28px; }
-.seat--1 .seat__commit { right: -56px; top: 0; }
-.seat--2 .seat__commit { right: -56px; bottom: 0; }
-.seat--3 .seat__commit { left: -56px;  bottom: 0; }
-.seat--4 .seat__commit { left: -56px;  top: 0; }

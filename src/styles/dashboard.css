@@ -1,0 +1,87 @@
+/* Stats dashboard + hand-history list + static hand review. */
+
+.dashboard,
+.review {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  padding: var(--sp-5);
+  display: grid;
+  gap: var(--sp-5);
+  align-content: start;
+}
+
+.dashboard__head,
+.review__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+.dashboard__title,
+.review__title { margin: 0; font-size: var(--fs-xl); }
+
+.dashboard__archetype {
+  margin-left: auto;
+  padding: 6px var(--sp-4);
+  border-radius: var(--r-pill);
+  background: var(--c-bg-elev);
+  border: 1px solid var(--c-accent);
+  color: var(--c-accent);
+  font-weight: var(--fw-medium);
+}
+
+.dashboard__tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: var(--sp-3);
+}
+
+.tile {
+  background: var(--c-bg-elev);
+  border: 1px solid #0c1c16;
+  border-radius: var(--r-md);
+  padding: var(--sp-3);
+  text-align: center;
+}
+
+.tile__value { font-family: var(--font-num); font-size: var(--fs-xl); color: var(--c-text); }
+.tile__label { font-size: var(--fs-xs); color: var(--c-text-faint); text-transform: uppercase; letter-spacing: .04em; margin-top: 4px; }
+
+.dashboard__subtitle { margin: 0 0 var(--sp-2); font-size: var(--fs-md); color: var(--c-text-dim); }
+.dashboard__leaks { display: grid; gap: var(--sp-2); }
+.dashboard__none { color: var(--c-text-faint); font-size: var(--fs-sm); }
+
+.history { display: grid; gap: var(--sp-1); }
+
+.history__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: rgba(255, 255, 255, .03);
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+
+.history__row:hover { background: rgba(255, 255, 255, .06); }
+.history__cards { gap: 2px; }
+.history__tag { font-size: var(--fs-xs); text-transform: uppercase; padding: 2px 6px; border-radius: var(--r-pill); }
+.history__tag--blue { background: var(--c-info); color: #07121d; }
+.history__tag--red { background: var(--c-danger); color: #fff; }
+.history__tag--none { background: var(--c-btn); color: var(--c-text-faint); }
+.history__net { font-family: var(--font-num); margin-left: auto; }
+.history__net--win { color: var(--c-good); }
+.history__net--loss { color: #e8867c; }
+.history__open { font-size: var(--fs-xs); color: var(--c-text-faint); }
+
+.dashboard__foot { display: flex; gap: var(--sp-3); }
+
+/* Hand review */
+.review__board, .review__seats, .review__analysis { display: grid; gap: var(--sp-2); }
+.review__board-label { font-size: var(--fs-xs); color: var(--c-text-faint); text-transform: uppercase; }
+.review__seat { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2); border-radius: var(--r-md); background: rgba(255,255,255,.03); }
+.review__seat--hero { border: 1px solid var(--c-you-plate); }
+.review__seat--winner { border: 1px solid var(--c-accent); }
+.review__seat-name { font-size: var(--fs-sm); }
+.review__win { color: var(--c-accent); font-size: var(--fs-xs); text-transform: uppercase; margin-left: auto; }

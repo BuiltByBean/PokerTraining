@@ -56,10 +56,53 @@ button {
   color: var(--c-accent);
 }
 
+.app__nav {
+  display: flex;
+  gap: var(--sp-2);
+  margin-left: var(--sp-5);
+  flex: 1;
+}
+
+.nav-btn {
+  background: transparent;
+  border: 1px solid var(--c-btn-border);
+  border-radius: var(--r-md);
+  color: var(--c-text-dim);
+  padding: 6px var(--sp-3);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+
+.nav-btn:hover {
+  color: var(--c-accent);
+  border-color: var(--c-accent);
+}
+
 .app__meta {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
+}
+
+.spectate-skip {
+  position: absolute;
+  bottom: var(--sp-5);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  background: var(--c-btn);
+  border: 1px solid var(--c-btn-border);
+  color: var(--c-text-dim);
+  border-radius: var(--r-pill);
+  padding: var(--sp-2) var(--sp-5);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.spectate-skip:hover {
+  color: var(--c-accent);
+  border-color: var(--c-accent);
 }
 
 .record {
