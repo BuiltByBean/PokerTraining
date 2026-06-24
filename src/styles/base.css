@@ -1,0 +1,96 @@
+/* Resets + global layout. Keep this file boring; per-component CSS lives elsewhere. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden; /* The table fills the viewport — no document scroll. */
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+  background: var(--c-bg);
+}
+
+.app__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-3) var(--sp-5);
+  border-bottom: 1px solid #0c1c16;
+  background: linear-gradient(180deg, #0a1410 0%, #07100c 100%);
+  z-index: 5;
+}
+
+.app__title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  letter-spacing: .04em;
+  color: var(--c-text);
+}
+
+.app__title span {
+  color: var(--c-accent);
+}
+
+.app__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.record {
+  font-family: var(--font-num);
+  font-size: var(--fs-sm);
+  color: var(--c-accent);
+  letter-spacing: .04em;
+}
+
+.icon-btn {
+  background: transparent;
+  border: 1px solid var(--c-btn-border);
+  border-radius: var(--r-md);
+  color: var(--c-text);
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.icon-btn:hover {
+  background: var(--c-btn-hover);
+}
+
+.stage {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at center, rgba(15, 60, 40, .35) 0%, transparent 70%),
+    var(--c-bg);
+}

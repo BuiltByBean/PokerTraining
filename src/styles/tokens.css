@@ -1,0 +1,108 @@
+/*
+ * Design tokens. Every color, radius, shadow, and font-size in the app comes
+ * from a var defined here. Touching a literal #hex anywhere outside this file
+ * is a bug — we want one place to retheme.
+ *
+ * Color naming: --c-{role}-{shade}. role is semantic (felt, chip, text), not
+ * raw color (green, red). That way a "rose" or "midnight" theme later just
+ * swaps the role definitions without renaming variables across the app.
+ */
+
+:root {
+  /* Spacing — 4px scale. Anything off-scale is a smell. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+
+  /* Radius */
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 14px;
+  --r-pill: 999px;
+
+  /* Typography — system stack first so we ship without a font download.
+     A future commit can swap to self-hosted Inter/Rajdhani like Data Dungeon. */
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-num: 'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas, 'Liberation Mono', monospace;
+
+  --fs-xs: 12px;
+  --fs-sm: 14px;
+  --fs-md: 16px;
+  --fs-lg: 20px;
+  --fs-xl: 28px;
+  --fs-2xl: 40px;
+  --fs-3xl: 64px;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-bold: 700;
+
+  /* Easing / motion */
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ease-in-out: cubic-bezier(.4, 0, .2, 1);
+  --dur-fast: 120ms;
+  --dur-med: 240ms;
+  --dur-slow: 480ms;
+
+  /* Elevation */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .35);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, .45);
+  --shadow-3: 0 12px 32px rgba(0, 0, 0, .55);
+  --shadow-card: 0 2px 6px rgba(0, 0, 0, .45), 0 0 0 1px rgba(0, 0, 0, .08) inset;
+}
+
+/* Felt theme — dark casino green, the default. */
+:root,
+[data-theme='felt'] {
+  --c-bg: #0a1410;
+  --c-bg-elev: #0f1d18;
+  --c-felt: #0e3a2a;
+  --c-felt-rim: #08251a;
+  --c-felt-vignette: radial-gradient(ellipse at center, #1f7a55 0%, #155c40 45%, #0a2a1d 100%);
+
+  --c-text: #e8ecea;
+  --c-text-dim: #a8b3ae;
+  --c-text-faint: #6a7672;
+
+  --c-accent: #d4af37;       /* warm gold for headers, record, "Big Win!" */
+  --c-accent-strong: #f3cb55;
+  --c-danger: #c0392b;
+  --c-good: #2ecc71;
+  --c-info: #4aa3df;
+
+  --c-card-bg: #fafafa;
+  --c-card-edge: #d6d6d6;
+  --c-card-back: #1d4f8b;
+  --c-card-back-pattern: repeating-linear-gradient(45deg, #224b80 0 6px, #1a3a66 6px 12px);
+
+  --c-suit-red: #c0392b;
+  --c-suit-black: #1a1a1a;
+
+  --c-chip-rim: #ffffff;
+  --c-chip-white: #ececec;
+  --c-chip-red: #b73224;
+  --c-chip-blue: #2776c1;
+  --c-chip-green: #2c8c4d;
+  --c-chip-black: #1a1a1a;
+  --c-chip-purple: #6a3e9b;
+  --c-chip-yellow: #d4af37;
+
+  --c-stack-plate: #5a1015;
+  --c-you-plate: #c19a32;
+
+  --c-btn: #1c2a25;
+  --c-btn-hover: #243733;
+  --c-btn-border: #2f4a42;
+  --c-btn-disabled: #182320;
+
+  --c-bubble: rgba(245, 245, 240, .94);
+  --c-bubble-text: #1a1a1a;
+
+  --c-overlay: rgba(5, 12, 9, .82);
+  --c-turn-ring: rgba(244, 207, 90, .85);
+}

@@ -1,0 +1,136 @@
+/*
+ * End-of-hand overlay. Modal-ish: dims the table behind it, blocks input
+ * until dismissed. Click anywhere to advance.
+ */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  /* Top-weighted gradient so the showdown banner sits over the dealer area
+     while the human's hole cards + the board's highlighted winners stay
+     readable below the banner — like 247freepoker.com's "Big Win!" style. */
+  background: linear-gradient(180deg,
+    rgba(5, 12, 9, .9)   0%,
+    rgba(5, 12, 9, .82) 38%,
+    rgba(5, 12, 9, .12) 60%,
+    rgba(5, 12, 9, 0)   80%);
+  display: grid;
+  grid-template-rows: 1fr 2fr;
+  place-items: start center;
+  padding-top: 8vh;
+  z-index: 10;
+  cursor: pointer;
+  animation: overlay-in var(--dur-med) var(--ease-out);
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.overlay__card {
+  display: grid;
+  gap: var(--sp-3);
+  justify-items: center;
+  text-align: center;
+  padding: var(--sp-5) var(--sp-7);
+  background: linear-gradient(180deg, rgba(20, 30, 25, .95), rgba(8, 14, 11, .95));
+  border-radius: var(--r-lg);
+  border: 1px solid rgba(255, 255, 255, .06);
+  box-shadow: var(--shadow-3);
+  max-width: 92vw;
+}
+
+.overlay__headline {
+  font-size: var(--fs-3xl);
+  font-weight: var(--fw-bold);
+  color: var(--c-accent);
+  letter-spacing: .04em;
+  margin: 0;
+  text-shadow: 0 4px 12px rgba(0, 0, 0, .6);
+}
+
+.overlay__pot {
+  font-family: var(--font-num);
+  font-size: var(--fs-xl);
+  color: var(--c-text);
+}
+
+.overlay__hand {
+  font-size: var(--fs-lg);
+  color: var(--c-text-dim);
+  font-style: italic;
+}
+
+.overlay__hint {
+  margin-top: var(--sp-4);
+  font-size: var(--fs-sm);
+  color: var(--c-text-faint);
+  letter-spacing: .04em;
+}
+
+.overlay__hint::before { content: '( '; }
+.overlay__hint::after  { content: ' )'; }
+
+/* Welcome / setup modal — same look as showdown but not click-to-dismiss. */
+.modal {
+  position: absolute;
+  inset: 0;
+  background: var(--c-overlay);
+  display: grid;
+  place-items: center;
+  z-index: 10;
+}
+
+.modal__card {
+  display: grid;
+  gap: var(--sp-4);
+  padding: var(--sp-6) var(--sp-7);
+  background: linear-gradient(180deg, rgba(20, 30, 25, .98), rgba(8, 14, 11, .98));
+  border-radius: var(--r-lg);
+  border: 1px solid rgba(255, 255, 255, .06);
+  box-shadow: var(--shadow-3);
+  text-align: center;
+  min-width: 360px;
+}
+
+.modal__title {
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-bold);
+  color: var(--c-accent);
+  margin: 0;
+}
+
+.modal__sub {
+  color: var(--c-text-dim);
+  font-size: var(--fs-md);
+}
+
+.modal__actions {
+  display: flex;
+  gap: var(--sp-3);
+  justify-content: center;
+  margin-top: var(--sp-3);
+}
+
+.modal__btn {
+  height: 48px;
+  padding: 0 var(--sp-5);
+  background: var(--c-btn);
+  border: 1px solid var(--c-btn-border);
+  color: var(--c-text);
+  border-radius: var(--r-md);
+  font-size: var(--fs-md);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.modal__btn:hover {
+  background: var(--c-btn-hover);
+}
+
+.modal__btn--primary {
+  background: linear-gradient(180deg, #2d4a40 0%, #1c2a25 100%);
+  border-color: #406354;
+  font-weight: var(--fw-medium);
+}

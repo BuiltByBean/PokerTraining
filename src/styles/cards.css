@@ -1,0 +1,83 @@
+/*
+ * Card visuals. Each card is a small DOM element rendering rank + suit; no
+ * SVG, no images. Suit glyphs come from the system font (♠♥♦♣) — they look
+ * fine and we skip a font download. Face-down cards use a striped pattern
+ * via repeating-linear-gradient.
+ */
+
+.card {
+  width: 58px;
+  height: 84px;
+  border-radius: var(--r-md);
+  background: var(--c-card-bg);
+  border: 1px solid var(--c-card-edge);
+  box-shadow: var(--shadow-card);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  align-items: start;
+  justify-items: center;
+  padding: 4px;
+  position: relative;
+  transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-med) var(--ease-out);
+  font-weight: var(--fw-bold);
+}
+
+.card--small {
+  width: 40px;
+  height: 58px;
+  padding: 2px;
+}
+
+.card--back {
+  background: var(--c-card-back);
+  background-image: var(--c-card-back-pattern);
+}
+
+.card__rank {
+  font-family: var(--font-ui);
+  font-size: 18px;
+  line-height: 1;
+  color: inherit;
+}
+
+.card--small .card__rank { font-size: 14px; }
+
+.card__suit {
+  font-size: 28px;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.card--small .card__suit { font-size: 20px; }
+
+.card[data-suit='h'],
+.card[data-suit='d'] {
+  color: var(--c-suit-red);
+}
+
+.card[data-suit='c'],
+.card[data-suit='s'] {
+  color: var(--c-suit-black);
+}
+
+/* Showdown emphasis. */
+.card--dim {
+  opacity: 0.4;
+  filter: grayscale(0.4);
+}
+
+.card--win {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-card), 0 0 0 2px var(--c-accent);
+}
+
+/* Cards overlap when in a 2-card hand. The negative right margin clamps the
+   second card on top of the first. */
+.seat__cards .card + .card {
+  margin-left: -22px;
+}
+
+/* Hole cards in the seat are slightly rotated for that hand-of-cards look. */
+.seat__cards .card:nth-child(1) { transform: rotate(-4deg); }
+.seat__cards .card:nth-child(2) { transform: rotate(4deg); }
+.seat__cards .card.card--win    { transform: translateY(-6px); }

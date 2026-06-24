@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en" data-theme="felt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <!-- Ask Dark Reader to leave our palette alone — we're already dark and the
+         extension's red→green inversion eats our felt and gold accents. -->
+    <meta name="darkreader-lock" />
+    <title>Poker Training</title>
+    <!--
+      Pre-paint theme resolution. Reads localStorage first so the felt color is
+      correct on first paint and we don't flash the default theme into the user's
+      chosen one. Matches the "no late reflow" rule from the Data Dungeon playbook.
+    -->
+    <script>
+      (function () {
+        try {
+          const t = localStorage.getItem('pt.theme');
+          if (t) document.documentElement.dataset.theme = t;
+        } catch {}
+      })();
+    </script>
+    <link rel="stylesheet" href="/src/styles/tokens.css" />
+    <link rel="stylesheet" href="/src/styles/base.css" />
+    <link rel="stylesheet" href="/src/styles/table.css" />
+    <link rel="stylesheet" href="/src/styles/cards.css" />
+    <link rel="stylesheet" href="/src/styles/actions.css" />
+    <link rel="stylesheet" href="/src/styles/overlay.css" />
+  </head>
+  <body>
+    <div id="app" class="app">
+      <header class="app__header">
+        <h1 class="app__title">Poker <span>Training</span></h1>
+        <div class="app__meta">
+          <span class="record" id="record">Record $0</span>
+          <button class="icon-btn" id="sound-toggle" aria-label="Toggle sound">♪</button>
+        </div>
+      </header>
+      <main id="stage" class="stage">
+        <!-- Game stage is mounted here by src/main.ts -->
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

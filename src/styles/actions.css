@@ -1,0 +1,160 @@
+/*
+ * Action bar — Fold / Check-or-Call / Raise — fixed to the bottom of the
+ * stage. When Raise is pressed, the bar swaps to a sizing slider with
+ * shortcut chips (½ pot, pot, all-in) and a confirm button.
+ */
+
+.action-bar {
+  position: absolute;
+  bottom: var(--sp-5);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: var(--sp-3);
+  align-items: center;
+  z-index: 6;
+}
+
+.action-btn {
+  min-width: 140px;
+  height: 56px;
+  padding: 0 var(--sp-5);
+  background: var(--c-btn);
+  color: var(--c-text);
+  border: 1px solid var(--c-btn-border);
+  border-radius: var(--r-md);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-medium);
+  letter-spacing: .02em;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  box-shadow: var(--shadow-2);
+}
+
+.action-btn:hover:not(:disabled) {
+  background: var(--c-btn-hover);
+}
+
+.action-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.action-btn:disabled {
+  background: var(--c-btn-disabled);
+  color: var(--c-text-faint);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.action-btn--primary {
+  background: linear-gradient(180deg, #2d4a40 0%, #1c2a25 100%);
+  border-color: #406354;
+}
+
+.action-btn--danger {
+  background: linear-gradient(180deg, #3a1d18 0%, #1c100e 100%);
+  border-color: #5a2c25;
+}
+
+.bet-slider {
+  position: absolute;
+  bottom: var(--sp-5);
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: var(--sp-3);
+  width: min(820px, 92%);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--c-bg-elev);
+  border: 1px solid var(--c-btn-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-3);
+  z-index: 6;
+}
+
+.bet-slider__cancel,
+.bet-slider__ok {
+  height: 44px;
+  padding: 0 var(--sp-4);
+  background: var(--c-btn);
+  border: 1px solid var(--c-btn-border);
+  color: var(--c-text);
+  border-radius: var(--r-md);
+  font-size: var(--fs-md);
+  cursor: pointer;
+}
+
+.bet-slider__ok {
+  background: linear-gradient(180deg, #2d4a40 0%, #1c2a25 100%);
+  border-color: #406354;
+  font-weight: var(--fw-medium);
+}
+
+.bet-slider__amount {
+  font-family: var(--font-num);
+  font-size: var(--fs-xl);
+  color: var(--c-accent);
+  min-width: 80px;
+  text-align: right;
+}
+
+.bet-slider__row {
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: var(--sp-2);
+}
+
+.bet-slider__range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: var(--c-felt-rim);
+  border-radius: var(--r-pill);
+  outline: none;
+}
+
+.bet-slider__range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--c-accent-strong);
+  cursor: pointer;
+  box-shadow: var(--shadow-1);
+}
+
+.bet-slider__range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--c-accent-strong);
+  cursor: pointer;
+  box-shadow: var(--shadow-1);
+  border: 0;
+}
+
+.bet-slider__shortcuts {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.bet-slider__shortcut {
+  background: transparent;
+  border: 1px solid var(--c-btn-border);
+  color: var(--c-text-dim);
+  height: 28px;
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.bet-slider__shortcut:hover {
+  color: var(--c-accent);
+  border-color: var(--c-accent);
+}
