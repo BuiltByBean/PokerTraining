@@ -26,12 +26,10 @@ export interface GameConfig {
   readonly playerCount: number;
   /** Bot difficulty, 1 (calling station) to 10 (crusher). */
   readonly difficulty: number;
-  /** Training aid: show opponents' hole cards face-up the whole hand. */
-  readonly revealOpponents: boolean;
 }
 
 const DEFAULT: SaveData = { stacks: {}, dealerIndex: 0, handNumber: 0 };
-export const DEFAULT_CONFIG: GameConfig = { playerCount: 5, difficulty: 5, revealOpponents: false };
+export const DEFAULT_CONFIG: GameConfig = { playerCount: 5, difficulty: 5 };
 
 export function loadConfig(): GameConfig {
   try {
@@ -41,7 +39,6 @@ export function loadConfig(): GameConfig {
     return {
       playerCount: clamp(p.playerCount ?? DEFAULT_CONFIG.playerCount, 2, 9),
       difficulty: clamp(p.difficulty ?? DEFAULT_CONFIG.difficulty, 1, 10),
-      revealOpponents: p.revealOpponents ?? DEFAULT_CONFIG.revealOpponents,
     };
   } catch {
     return DEFAULT_CONFIG;

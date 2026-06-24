@@ -21,6 +21,8 @@ export interface TableViewOptions {
   readonly winningCards: ReadonlySet<string>;
   readonly revealHole: ReadonlySet<string>;
   readonly showZeroPot?: boolean;
+  /** When set (hand over), still-hidden opponents get a per-seat Reveal button. */
+  readonly onReveal?: (playerId: string) => void;
 }
 
 export function renderTable(state: GameState, opts: TableViewOptions): HTMLElement {
@@ -78,6 +80,10 @@ function renderSeat(
   const holeCards = p.hole.map(c =>
     showFaceUp ? renderCard(c, { small, ...holeHighlight(c, opts) }) : renderCardBack({ small }));
 
+  // At hand end, a hidden opponent who held cards can be peeked at on demand.
+  const canReveal = !isYou && !showFaceUp && p.hole.length > 0 && opts.onReveal !== undefined;
+  const reveal = opts.onReveal;
+
   return el(
     'div',
     { class: classes.join(' '), style: `left:${pos.xPct}%;top:${pos.yPct}%` },
@@ -87,7 +93,9 @@ function renderSeat(
       el('div', { class: 'seat__stack' }, fmtMoney(p.stack)),
       badge ? el('div', { class: `seat__badge seat__badge--${badgeClass(badge)}` }, badge) : null),
     p.betThisStreet > 0 ? el('div', { class: 'seat__commit' }, fmtMoney(p.betThisStreet)) : null,
-    bubble(opts.bubbles.get(p.id)),
+    canReveal && reveal
+      ? el('button', { class: 'seat__reveal', onclick: () => reveal(p.id) }, 'Reveal cards')
+      : bubble(opts.bubbles.get(p.id)),
   );
 }
 

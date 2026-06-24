@@ -151,6 +151,26 @@
   transform: translateY(0);
 }
 
+/* Per-seat "Reveal cards" button, shown only when the hand is over. */
+.seat__reveal {
+  margin-top: 2px;
+  padding: 3px var(--sp-3);
+  background: var(--c-btn);
+  border: 1px solid var(--c-accent);
+  color: var(--c-accent);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  letter-spacing: .03em;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: var(--shadow-1);
+}
+
+.seat__reveal:hover {
+  background: var(--c-accent);
+  color: #1a1410;
+}
+
 .seat--toact::before {
   content: '';
   position: absolute;

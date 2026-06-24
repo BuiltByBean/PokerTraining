@@ -58,8 +58,10 @@ tests/          vitest; covers engine + analysis end-to-end (unit + integration)
 - Animations that block input. Action UI must be responsive even mid-deal.
 
 ## In v2 (the training layer)
-- Configurable table: 2-9 players, difficulty 1-10, reveal-opponents toggle.
-- Watch the runout after folding (spectate) + see opponents' cards.
+- Configurable table: 2-9 players, difficulty 1-10.
+- Watch the runout after folding (spectate). Cards stay hidden during play; at
+  hand end showdown hands auto-reveal and each folded seat gets a per-player
+  "Reveal cards" button (no session-wide reveal toggle).
 - Every hand recorded, graded, and leak-checked. Per-hand coaching panel
   ("you had no business there", "won on a fold not merit", "false security"),
   lifetime HUD stats + archetype, and a hand-history browser with review.

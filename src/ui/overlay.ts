@@ -17,10 +17,10 @@ export interface ShowdownOptions {
 export function renderShowdown(opts: ShowdownOptions): HTMLElement {
   const main = opts.result.awards[0];
   if (!main || main.winners.length === 0) {
-    return el('div', { class: 'overlay', onclick: opts.onContinue },
-      el('div', { class: 'overlay__card' },
+    return el('div', { class: 'overlay' },
+      el('div', { class: 'overlay__card', onclick: opts.onContinue },
         el('h2', { class: 'overlay__headline' }, 'Hand Over'),
-        el('div', { class: 'overlay__hint' }, 'Press anywhere to continue'),
+        el('div', { class: 'overlay__hint' }, 'Click to continue'),
       ),
     );
   }
@@ -36,14 +36,14 @@ export function renderShowdown(opts: ShowdownOptions): HTMLElement {
 
   return el(
     'div',
-    { class: 'overlay', onclick: opts.onContinue },
+    { class: 'overlay' },
     el(
       'div',
-      { class: 'overlay__card' },
+      { class: 'overlay__card', onclick: opts.onContinue },
       el('h2', { class: 'overlay__headline' }, headline),
       el('div', { class: 'overlay__pot' }, fmtMoney(totalWonByHuman || potTotal)),
       handName ? el('div', { class: 'overlay__hand' }, handName) : null,
-      el('div', { class: 'overlay__hint' }, 'Press anywhere to continue'),
+      el('div', { class: 'overlay__hint' }, 'Click to continue'),
     ),
   );
 }

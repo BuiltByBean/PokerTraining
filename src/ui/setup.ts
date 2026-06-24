@@ -39,8 +39,6 @@ export function renderSetup(opts: SetupOptions): HTMLElement {
     diffWord.textContent = DIFFICULTY_WORDS[n - 1] ?? '';
   });
 
-  const reveal = toggle(draft.revealOpponents, on => { draft.revealOpponents = on; });
-
   const actions = el('div', { class: 'setup__actions' },
     opts.hasSave
       ? el('button', { class: 'modal__btn modal__btn--primary', onclick: () => opts.onStart(draft, true) },
@@ -55,7 +53,6 @@ export function renderSetup(opts: SetupOptions): HTMLElement {
       field('Players', el('div', { class: 'setup__row' }, players, playersValue)),
       field('Difficulty', el('div', { class: 'setup__row' }, difficulty,
         el('div', { class: 'setup__diff' }, diffValue, diffWord))),
-      field('Reveal opponents', reveal),
       actions,
     ),
   );
@@ -83,16 +80,4 @@ function slider(value: number, min: number, max: number, onChange: (n: number) =
     class: 'bet-slider__range setup__slider',
     oninput: (e: Event) => onChange(Number((e.target as HTMLInputElement).value)),
   });
-}
-
-function toggle(on: boolean, onChange: (on: boolean) => void): HTMLElement {
-  const btn = el('button', { class: `setup__toggle${on ? ' setup__toggle--on' : ''}` }, on ? 'On' : 'Off');
-  let state = on;
-  btn.addEventListener('click', () => {
-    state = !state;
-    btn.textContent = state ? 'On' : 'Off';
-    btn.classList.toggle('setup__toggle--on', state);
-    onChange(state);
-  });
-  return btn;
 }

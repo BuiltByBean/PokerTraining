@@ -64,21 +64,3 @@
   font-size: var(--fs-sm);
   color: var(--c-text-dim);
 }
-
-.setup__toggle {
-  align-self: flex-start;
-  min-width: 80px;
-  height: 40px;
-  border-radius: var(--r-pill);
-  background: var(--c-btn);
-  border: 1px solid var(--c-btn-border);
-  color: var(--c-text-dim);
-  cursor: pointer;
-  font-weight: var(--fw-medium);
-}
-
-.setup__toggle--on {
-  background: var(--c-good);
-  border-color: var(--c-good);
-  color: #07130b;
-}

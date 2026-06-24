@@ -47,6 +47,8 @@ interface AppState {
   startStacks: Record<string, number>;
   bubbles: Map<string, string>;
   winningCards: Set<string>;
+  /** Opponents the player chose to peek at this hand (reset each hand). */
+  manualReveals: Set<string>;
   /** Hero folded/busted but the hand plays on — we watch. */
   spectating: boolean;
   overlay: 'none' | 'showdown';
@@ -82,6 +84,7 @@ const app: AppState = {
   startStacks: {},
   bubbles: new Map(),
   winningCards: new Set(),
+  manualReveals: new Set(),
   spectating: false,
   overlay: 'none',
   analysis: undefined,
@@ -166,6 +169,7 @@ function dealNextHand(): void {
   app.dealerIndex = (app.dealerIndex + 1) % app.seats.length;
   app.bubbles = new Map();
   app.winningCards = new Set();
+  app.manualReveals = new Set();
   app.spectating = false;
   app.overlay = 'none';
   app.analysis = undefined;
@@ -347,6 +351,8 @@ function renderGameScreen(): void {
       bubbles: app.bubbles,
       winningCards: app.winningCards,
       revealHole: revealedSet(state),
+      // Only at hand end do hidden opponents get a per-seat Reveal button.
+      ...(app.overlay === 'showdown' ? { onReveal: revealPlayer } : {}),
     }),
   ];
 
@@ -374,16 +380,28 @@ function renderGameScreen(): void {
   stage.replaceChildren(...children);
 }
 
-/** Which players' hole cards to show, given reveal setting + spectate/showdown. */
+/**
+ * Whose hole cards are face-up. During play, nobody's (real poker). At a
+ * genuine multiway showdown the players who got there are shown automatically;
+ * everyone else stays hidden until the player clicks their Reveal button
+ * (tracked in manualReveals). A fold-around isn't a showdown, so nobody is
+ * auto-revealed — every opponent gets a Reveal button instead.
+ */
 function revealedSet(state: GameState): Set<string> {
   const out = new Set<string>();
-  const revealAll = app.config.revealOpponents || app.spectating;
+  const contenders = state.players.filter(p => p.status === 'active' || p.status === 'allin');
+  const wasShowdown = app.overlay === 'showdown' && contenders.length >= 2;
   for (const p of state.players) {
     if (p.id === app.humanId) continue;
-    if (revealAll && p.status !== 'sittingout') out.add(p.id);
-    else if (app.overlay === 'showdown' && p.status !== 'folded') out.add(p.id);
+    if (app.manualReveals.has(p.id)) out.add(p.id);
+    else if (wasShowdown && (p.status === 'active' || p.status === 'allin')) out.add(p.id);
   }
   return out;
+}
+
+function revealPlayer(id: string): void {
+  app.manualReveals.add(id);
+  render();
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────
