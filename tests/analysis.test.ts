@@ -87,6 +87,33 @@ describe('decision grading', () => {
     expect(g?.note).toContain('Villain');
   });
 
+  it('does NOT punish folding a weak hand to a bluff (anti-resulting)', () => {
+    // Hero 8-high (no pair, no draw) folds the flop to a bet; villain was
+    // bluffing with 7-high, so hindsight equity is high — but folding is correct.
+    const board = 'Jd Ac Ks';
+    const r = record({
+      hole: { P0: '8h 6h', P1: '7d 2c' },
+      board,
+      snapshots: [snap({ action: { kind: 'fold', amount: 0 }, street: 'flop', board: cards(board), potBefore: 40, betFaced: 10, amountPutIn: 0, currentBet: 10 })],
+    });
+    const [g] = gradeHand(r, rng());
+    expect(g?.hindsightEquity).toBeGreaterThan(0.6); // would have won in hindsight
+    expect(g?.verdict).toBe('correct');               // ...but folding was right
+    expect(g?.note.toLowerCase()).toContain('bluff');
+  });
+
+  it('still flags folding a real made hand that was ahead', () => {
+    // Hero flopped top two pair and folds to a bet — that's a genuine leak.
+    const board = 'Ah Kd 4c';
+    const r = record({
+      hole: { P0: 'Ac Kc', P1: '7d 2h' },
+      board,
+      snapshots: [snap({ action: { kind: 'fold', amount: 0 }, street: 'flop', board: cards(board), potBefore: 40, betFaced: 10, amountPutIn: 0, currentBet: 10 })],
+    });
+    const [g] = gradeHand(r, rng());
+    expect(g?.verdict === 'mistake' || g?.verdict === 'blunder').toBe(true);
+  });
+
   it('calls out folding a hand that could be checked for free', () => {
     const r = record({
       hole: { P0: 'Ah Ad', P1: '2c 7d' },

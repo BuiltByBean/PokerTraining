@@ -112,6 +112,14 @@ describe('equity — 7-high ahead of a bluff (the "84%" sanity check)', () => {
     const r = heroEquity('7c 6h', 'Qd 9h', 'Ks Qh Jd 2s');
     expect(r.equities[0]?.equity).toBeLessThan(0.15);
   });
+
+  it('8-high on the flop is well ahead of a worse bluff (two cards to come)', () => {
+    // Hero 86, villain 72 (both whiff A-K-J): villain only ~6 outs over two
+    // cards, so hero is the hindsight favourite even though folding is correct.
+    const r = heroEquity('8h 6h', '7d 2c', 'Jd Ac Ks');
+    expect(r.method).toBe('exact'); // flop → enumerate turn+river
+    expect(r.equities[0]?.equity).toBeGreaterThan(0.6);
+  });
 });
 
 describe('equity — multiway', () => {

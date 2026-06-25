@@ -12,9 +12,11 @@
  */
 
 import { equity } from '../engine/equity';
+import { evaluate } from '../engine/evaluator';
 import { evCall, requiredEquity } from '../engine/odds';
 import type { Rng } from '../engine/rng';
 import type { Card, Rank, Suit } from '../engine/types';
+import { drawOuts } from './draws';
 import type { DecisionSnapshot } from './recorder';
 import type { HandRecord } from './record';
 
@@ -50,7 +52,7 @@ function gradeDecision(snap: DecisionSnapshot, record: HandRecord, rng: Rng): De
   // Who the equity was measured against, so the % is verifiable in the note.
   const vs = describeOpponents(snap, record);
 
-  if (kind === 'fold') return gradeFold(snap, eq, reqEq, toCall, bb, vs);
+  if (kind === 'fold') return gradeFold(snap, eq, reqEq, toCall, bb, vs, hadContinuingMerit(snap, record));
   if (kind === 'check') return gradeCheck(snap, eq, reqEq);
   if (kind === 'call' || (kind === 'allin' && snap.amountPutIn <= snap.betFaced)) {
     return gradeCall(snap, eq, reqEq, bb, vs);
@@ -71,16 +73,30 @@ function gradeCall(snap: DecisionSnapshot, eq: number, reqEq: number, bb: number
   return { snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: ev, evLossBb, verdict: verdictFor(evLossBb), note };
 }
 
-function gradeFold(snap: DecisionSnapshot, eq: number, reqEq: number, toCall: number, bb: number, vs: string): DecisionGrade {
+function gradeFold(
+  snap: DecisionSnapshot, eq: number, reqEq: number, toCall: number, bb: number, vs: string, hadMerit: boolean,
+): DecisionGrade {
   const wouldHaveBeen = evCall(eq, snap.potBefore, toCall);
-  const evLossBb = Math.max(0, wouldHaveBeen) / bb;
   const against = vs ? ` against ${vs}` : '';
-  const note = snap.betFaced === 0
-    ? `You folded a hand you could have seen for free — nobody had bet, so checking cost nothing. Never fold when you can check.`
-    : wouldHaveBeen > 0
-      ? `Too tight — calling would have made money. You had about a ${pct(eq)} chance to win${against}, and only needed ${pct(reqEq)} to call.`
-      : `Good fold — only about a ${pct(eq)} chance to win${against}, not enough to call the ${pct(reqEq)} price.`;
-  return { snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: 0, evLossBb, verdict: verdictFor(evLossBb), note };
+  const grade = (evLossBb: number, note: string): DecisionGrade =>
+    ({ snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: 0, evLossBb, verdict: verdictFor(evLossBb), note });
+
+  if (snap.betFaced === 0) {
+    return grade(Math.max(0, wouldHaveBeen) / bb,
+      `You folded a hand you could have seen for free — nobody had bet, so checking cost nothing. Never fold when you can check.`);
+  }
+  if (wouldHaveBeen <= 0) {
+    return grade(0, `Good fold — only about a ${pct(eq)} chance to win${against}, not enough to call the ${pct(reqEq)} price.`);
+  }
+  if (hadMerit) {
+    return grade(wouldHaveBeen / bb,
+      `Too tight — calling would have made money. You had about a ${pct(eq)} chance to win${against}, and only needed ${pct(reqEq)} to call.`);
+  }
+  // +EV only in hindsight, but a weak hand with nothing to continue on: folding
+  // to a bet is standard — you simply ran into a bluff this time. Grading it a
+  // mistake would be "resulting" (punishing a good decision for a bad-luck result).
+  return grade(0,
+    `Fine fold — folding a weak hand to a bet is standard. In hindsight you were ahead${against} (~${pct(eq)} to win) because they were bluffing, but you can't profitably call here without a real hand or draw.`);
 }
 
 function gradeCheck(snap: DecisionSnapshot, eq: number, reqEq: number): DecisionGrade {
@@ -115,6 +131,25 @@ function heroEquity(snap: DecisionSnapshot, record: HandRecord, rng: Rng): numbe
   if (opponents.length === 0) return 1; // uncontested
   const result = equity({ players: [{ id: heroId, hole: heroHole }, ...opponents], board: snap.board, rng });
   return result.equities.find(e => e.playerId === heroId)?.equity ?? 0;
+}
+
+/**
+ * Did the hero actually have something to continue with? Used so we don't grade
+ * folding air as a "mistake" just because the opponent turned out to be bluffing.
+ * Postflop: any made hand (pair+) or a real draw. Preflop: a genuinely strong
+ * starting hand (a pair or two broadway cards) — folding trash is never a leak.
+ */
+function hadContinuingMerit(snap: DecisionSnapshot, record: HandRecord): boolean {
+  const hole = record.holeCards[record.config.humanId] ?? [];
+  if (hole.length < 2) return false;
+  if (snap.board.length >= 3) {
+    const cards = [...hole, ...snap.board];
+    if (evaluate(cards).category !== 'high-card') return true;
+    return drawOuts(cards) > 0;
+  }
+  const a = hole[0] as Card;
+  const b = hole[1] as Card;
+  return a.rank === b.rank || (Math.min(a.rank, b.rank) >= 10);
 }
 
 function verdictFor(evLossBb: number): Verdict {
