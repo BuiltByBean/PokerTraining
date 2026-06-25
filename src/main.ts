@@ -108,7 +108,7 @@ function bootstrap(): void {
 }
 
 function wireNav(): void {
-  byId('nav-table').addEventListener('click', () => { if (app.seats.length) goToGame(); });
+  byId('nav-table').addEventListener('click', goToGame);
   byId('nav-stats').addEventListener('click', goToDashboard);
   byId('nav-setup').addEventListener('click', goToSetup);
 }
@@ -121,9 +121,15 @@ function goToSetup(): void {
 
 function goToGame(): void {
   clearTimers();
+  // No table set up yet (e.g. opened straight to Stats) → go pick a table
+  // instead of trying to deal a hand with zero players.
+  if (app.seats.length === 0) { goToSetup(); return; }
   app.screen = 'game';
-  if (!app.hand) dealNextHand();
-  else render();
+  if (!app.hand) { dealNextHand(); return; }
+  render();
+  // A hand was mid-flight when we navigated away; its bot timer was cleared, so
+  // resume the loop. (isComplete guard avoids re-finishing a finished hand.)
+  if (app.overlay === 'none' && !app.hand.isComplete()) scheduleNextTurn();
 }
 
 async function goToDashboard(): Promise<void> {
