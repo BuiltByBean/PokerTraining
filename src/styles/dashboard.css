@@ -36,6 +36,18 @@
 
 .dashboard__subtitle { margin: 0 0 var(--sp-2); font-size: var(--fs-md); color: var(--c-text-dim); }
 
+.dashboard__leaks, .dashboard__strengths { display: grid; gap: var(--sp-2); }
+
+/* A thing you do well — green, the positive counterpart to a leak card. */
+.strength {
+  display: grid;
+  gap: 2px;
+  padding: var(--sp-2) var(--sp-3);
+  border-left: 3px solid var(--c-good);
+  border-radius: var(--r-sm);
+  background: rgba(46, 204, 113, .06);
+}
+
 /* Plain-language playing-style list. */
 .statlist { display: grid; gap: var(--sp-1); }
 
@@ -51,7 +63,6 @@
 .statrow__name { font-size: var(--fs-md); color: var(--c-text); }
 .statrow__value { font-family: var(--font-num); font-size: var(--fs-lg); color: var(--c-accent); }
 .statrow__desc { font-size: var(--fs-sm); color: var(--c-text-faint); }
-.dashboard__leaks { display: grid; gap: var(--sp-2); }
 .dashboard__none { color: var(--c-text-faint); font-size: var(--fs-sm); }
 
 .history { display: grid; gap: var(--sp-1); }

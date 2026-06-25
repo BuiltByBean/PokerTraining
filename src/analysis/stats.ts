@@ -44,10 +44,12 @@ export interface StatPanel {
   readonly archetype: Archetype | undefined;
 }
 
-const MIN_HANDS = 30;
-const MIN_OPP = 20;
-const MIN_SHOWDOWN = 15;
-const MIN_POSTFLOP = 15;
+// Kept modest so a casual player gets feedback within a session, while still
+// avoiding "leak!" calls off a handful of noisy hands.
+const MIN_HANDS = 20;
+const MIN_OPP = 12;
+const MIN_SHOWDOWN = 10;
+const MIN_POSTFLOP = 12;
 
 export function computeStats(records: readonly HandRecord[]): StatPanel {
   const c = newCounters();

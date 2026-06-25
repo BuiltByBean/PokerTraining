@@ -6,7 +6,10 @@
  * trust them as a "style").
  */
 
-import { computeStats, detectAggregateLeaks, type Ratio, type StatPanel } from '../analysis/index';
+import {
+  computeStats, detectAggregateLeaks, detectStrengths,
+  type Leak, type Ratio, type StatPanel, type Strength,
+} from '../analysis/index';
 import type { HandRecord } from '../analysis/record';
 import type { Card } from '../engine/types';
 import { renderCard } from './cards';
@@ -26,11 +29,12 @@ const ARCHETYPE_LABEL: Record<string, string> = {
   balanced: 'Well balanced',
 };
 
-const RELIABLE_AT = 30;
+const RELIABLE_AT = 20;
 
 export function renderDashboard(opts: DashboardOptions): HTMLElement {
   const stats = computeStats(opts.records);
   const leaks = detectAggregateLeaks(opts.records, stats);
+  const strengths = detectStrengths(stats);
 
   return el('div', { class: 'dashboard' },
     el('div', { class: 'dashboard__head' },
@@ -42,22 +46,44 @@ export function renderDashboard(opts: DashboardOptions): HTMLElement {
         stats.archetype ? `Your style: ${ARCHETYPE_LABEL[stats.archetype] ?? stats.archetype}`
           : `${Math.max(0, RELIABLE_AT - stats.hands)} more hands to read your style`)),
 
+    workOn(leaks, stats.hands),
+    goodAt(strengths, stats.hands),
     winSource(opts.records),
     style(stats),
-
-    leaks.length
-      ? el('section', { class: 'dashboard__leaks' },
-          el('h3', { class: 'dashboard__subtitle' }, 'What to work on'),
-          ...leaks.map(l => el('div', { class: `leak leak--${l.severity}` },
-            el('div', { class: 'leak__title' }, l.title),
-            el('div', { class: 'leak__body' }, l.explanation))))
-      : el('p', { class: 'dashboard__none' }, 'Keep playing — once there’s enough data, your habits to fix will show up here.'),
-
     history(opts),
+
     el('div', { class: 'dashboard__foot' },
       el('button', { class: 'modal__btn', onclick: opts.onExport }, 'Export hands'),
       el('button', { class: 'modal__btn modal__btn--danger', onclick: opts.onClear }, 'Clear history')),
   );
+}
+
+// ── what to work on / what you're good at ──────────────────────────────────
+
+function workOn(leaks: readonly Leak[], hands: number): HTMLElement {
+  const body = leaks.length
+    ? leaks.map(l => insightCard(`leak leak--${l.severity}`, l.title, l.explanation))
+    : [el('p', { class: 'dashboard__none' }, hands < RELIABLE_AT
+        ? `Play ${RELIABLE_AT - hands} more hands and the things to fix will show up here.`
+        : 'Nothing glaring right now — nicely played. 👍')];
+  return el('section', { class: 'dashboard__leaks' },
+    el('h3', { class: 'dashboard__subtitle' }, 'What to work on'), ...body);
+}
+
+function goodAt(strengths: readonly Strength[], hands: number): HTMLElement {
+  const body = strengths.length
+    ? strengths.map(s => insightCard('strength', s.title, s.explanation))
+    : [el('p', { class: 'dashboard__none' }, hands < RELIABLE_AT
+        ? `Play ${RELIABLE_AT - hands} more hands and your strengths will show up here.`
+        : 'Keep building — your strengths will firm up as you play more.')];
+  return el('section', { class: 'dashboard__strengths' },
+    el('h3', { class: 'dashboard__subtitle' }, 'What you’re good at'), ...body);
+}
+
+function insightCard(cls: string, title: string, body: string): HTMLElement {
+  return el('div', { class: cls },
+    el('div', { class: 'leak__title' }, title),
+    el('div', { class: 'leak__body' }, body));
 }
 
 // ── where your wins come from (skill vs. fold equity), as % of wins ────────

@@ -55,39 +55,97 @@ export function detectHandLeaks(record: HandRecord, grades: readonly DecisionGra
   return leaks;
 }
 
+/** Something the player does well — the inverse of a leak. */
+export interface Strength {
+  readonly code: string;
+  readonly title: string;
+  readonly explanation: string;
+}
+
+const SEVERITY_RANK: Record<Severity, number> = { severe: 0, warn: 1, info: 2 };
+
+/**
+ * All the things to work on, each detected independently from the stats (not a
+ * single archetype label) so every glaring issue shows up, most serious first.
+ * Each check only fires once its stat has cleared its minimum sample.
+ */
 export function detectAggregateLeaks(records: readonly HandRecord[], stats: StatPanel): Leak[] {
-  const leaks: Leak[] = [];
-  if (stats.archetype === 'calling-station') {
-    leaks.push({
-      code: 'calling-station', severity: 'severe', title: 'You call too much',
-      explanation: `You go to showdown ${pctOf(stats.wtsd.pct)} of the time but only win there ${pctOf(stats.wssd.pct)} — you're paying people off with hands that can't win. Fold more often when someone bets big on the river.`,
+  const out: Leak[] = [];
+  const { vpip, pfr, vpipPfrGap, af, wtsd, wssd } = stats;
+
+  if (def(wtsd) && def(wssd) && (wtsd.pct as number) > 0.38 && (wssd.pct as number) < 0.47) {
+    out.push({
+      code: 'station', severity: 'severe', title: 'You call too much after the flop',
+      explanation: `You reach showdown ${pctOf(wtsd.pct)} of the time but win only ${pctOf(wssd.pct)} of those — you're paying people off with hands that can't win. Fold more when you're likely beaten.`,
     });
   }
-  if (stats.archetype === 'loose-passive') {
-    leaks.push({
-      code: 'loose-passive', severity: 'warn', title: 'Too many hands, not enough betting',
-      explanation: `You play ${pctOf(stats.vpip.pct)} of your hands but raise only ${pctOf(stats.pfr.pct)} of them — lots of calling, not enough taking the lead. Play fewer hands, and bet your strong ones instead of just calling.`,
+  if (def(vpip) && (vpip.pct as number) > 0.40) {
+    out.push({
+      code: 'too-loose', severity: 'warn', title: 'You play too many hands',
+      explanation: `You play ${pctOf(vpip.pct)} of your hands. Folding more weak starting hands before the flop will stop you bleeding chips in tough spots.`,
     });
   }
-  if (stats.archetype === 'nit') {
-    leaks.push({
-      code: 'nit', severity: 'info', title: 'You play very few hands',
-      explanation: `You only play ${pctOf(stats.vpip.pct)} of hands — you're folding a lot of spots that make money, and you get no action when you finally do play. Loosen up, especially in late position.`,
+  if (vpipPfrGap !== undefined && vpipPfrGap > 0.18 && def(vpip) && (vpip.pct as number) > 0.22) {
+    out.push({
+      code: 'passive-pre', severity: 'warn', title: 'You call too much before the flop',
+      explanation: `You play ${pctOf(vpip.pct)} of hands but raise only ${pctOf(pfr.pct)} — too much limping/calling. Raising takes the lead; calling lets opponents control the hand.`,
     });
   }
-  if (stats.archetype === 'maniac') {
-    leaks.push({
-      code: 'maniac', severity: 'warn', title: 'Too wild',
-      explanation: `You bet and raise a ton, often with weak hands — that bleeds chips. Pick better spots to apply pressure.`,
+  if (def(vpip) && (vpip.pct as number) < 0.14) {
+    out.push({
+      code: 'too-tight', severity: 'info', title: 'You fold too many hands',
+      explanation: `You only play ${pctOf(vpip.pct)} of hands — you're missing profitable spots and getting no action when you finally do play. Open up, especially in late position.`,
     });
   }
-  if (stats.hands >= 50 && stats.redLineBb < -50 && (stats.af === undefined || stats.af < 1.2)) {
-    leaks.push({
-      code: 'red-line-bleed', severity: 'warn', title: 'You give up too many pots',
-      explanation: `You're down a lot in pots nobody showed down — you fold too often and don't fight back. A few well-timed bets to take pots others have given up on would help.`,
+  if (af !== undefined && af < 1.0) {
+    out.push({
+      code: 'passive-post', severity: 'warn', title: 'You don’t bet or raise enough',
+      explanation: `After the flop you mostly check and call (aggression ${af.toFixed(1)}×). Betting your strong hands wins more, and the odd bet steals pots others give up on.`,
     });
   }
-  return leaks;
+  if (af !== undefined && af > 4 && def(vpip) && (vpip.pct as number) > 0.35) {
+    out.push({
+      code: 'over-aggro', severity: 'warn', title: 'You may be too wild',
+      explanation: `Lots of hands played and very high aggression (${af.toFixed(1)}×) — you're probably bluffing too often. Pick better spots to apply pressure.`,
+    });
+  }
+  return out.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
+}
+
+/** Things the player is doing well — same sample gating as the leaks. */
+export function detectStrengths(stats: StatPanel): Strength[] {
+  const out: Strength[] = [];
+  const { vpip, pfr, vpipPfrGap, af, wtsd, wssd, wwsf } = stats;
+
+  if (def(vpip) && (vpip.pct as number) >= 0.15 && (vpip.pct as number) <= 0.30) {
+    out.push({ code: 'good-selection', title: 'Good starting-hand selection',
+      explanation: `You play ${pctOf(vpip.pct)} of hands — a healthy, disciplined range.` });
+  }
+  if (def(pfr) && vpipPfrGap !== undefined && (pfr.pct as number) >= 0.13 && vpipPfrGap <= 0.10) {
+    out.push({ code: 'takes-lead', title: 'You take the lead',
+      explanation: `You raise (${pctOf(pfr.pct)}) rather than limping in — proactive, aggressive poker.` });
+  }
+  if (af !== undefined && af >= 1.5 && af <= 3.5) {
+    out.push({ code: 'good-aggro', title: 'Healthy aggression',
+      explanation: `Your bet/raise rate after the flop (${af.toFixed(1)}×) is right in the sweet spot.` });
+  }
+  if (def(wssd) && (wssd.pct as number) >= 0.52) {
+    out.push({ code: 'strong-showdowns', title: 'You win at showdown',
+      explanation: `When you reach the end you win ${pctOf(wssd.pct)} of the time — you show up with strong hands.` });
+  }
+  if (def(wtsd) && (wtsd.pct as number) >= 0.25 && (wtsd.pct as number) <= 0.34) {
+    out.push({ code: 'good-discipline', title: 'Good showdown discipline',
+      explanation: `You go to showdown ${pctOf(wtsd.pct)} of the time — not too sticky, not too nitty.` });
+  }
+  if (def(wwsf) && (wwsf.pct as number) >= 0.45) {
+    out.push({ code: 'wins-postflop', title: 'You win after the flop',
+      explanation: `You take ${pctOf(wwsf.pct)} of the pots you see a flop in.` });
+  }
+  return out;
+}
+
+function def(r: { pct: number | undefined }): boolean {
+  return r.pct !== undefined;
 }
 
 // ── per-hand detectors ──────────────────────────────────────────────────────

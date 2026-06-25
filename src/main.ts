@@ -135,8 +135,9 @@ function goToGame(): void {
 async function goToDashboard(): Promise<void> {
   clearTimers();
   app.screen = 'dashboard';
+  render(); // switch immediately (with whatever's cached), then refresh
   app.historyCache = await getAllHands();
-  render();
+  if (app.screen === 'dashboard') render();
 }
 
 function startSession(config: GameConfig, resume: boolean): void {

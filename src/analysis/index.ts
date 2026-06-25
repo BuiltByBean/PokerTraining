@@ -13,10 +13,10 @@ import type { HandRecord } from './record';
 
 export type { DecisionGrade, Verdict } from './decision';
 export { verdictLabel } from './decision';
-export type { Leak, Severity } from './leaks';
+export type { Leak, Severity, Strength } from './leaks';
 export type { StatPanel, Ratio, Archetype } from './stats';
 export { computeStats } from './stats';
-export { detectAggregateLeaks } from './leaks';
+export { detectAggregateLeaks, detectStrengths } from './leaks';
 
 export interface EquityPoint {
   readonly street: Street;
