@@ -12,7 +12,7 @@
  */
 
 import { equity } from '../engine/equity';
-import { evaluate } from '../engine/evaluator';
+import { evaluate, type Category } from '../engine/evaluator';
 import { evCall, requiredEquity } from '../engine/odds';
 import { preflopStrength } from '../bots/strength';
 import type { Rng } from '../engine/rng';
@@ -50,35 +50,39 @@ function gradeDecision(snap: DecisionSnapshot, record: HandRecord, rng: Rng): De
   const reqEq = snap.betFaced > 0 ? requiredEquity(toCall, snap.potBefore) : 0;
   const bb = record.config.bigBlind;
   const kind = snap.action.kind;
-  // Who the equity was measured against, so the % is verifiable in the note.
+  // Who the equity was measured against, and what the hero actually held, so
+  // the % is verifiable and the player learns what their hand was.
   const vs = describeOpponents(snap, record);
+  const made = heroHandText(snap, record);
 
-  if (kind === 'fold') return gradeFold(snap, eq, reqEq, toCall, bb, vs, hadContinuingMerit(snap, record));
+  if (kind === 'fold') return gradeFold(snap, eq, reqEq, toCall, bb, vs, hadContinuingMerit(snap, record), made);
   if (kind === 'check') return gradeCheck(snap, eq, reqEq);
   if (kind === 'call' || (kind === 'allin' && snap.amountPutIn <= snap.betFaced)) {
-    return gradeCall(snap, eq, reqEq, bb, vs);
+    return gradeCall(snap, eq, reqEq, bb, vs, made);
   }
-  return gradeAggressive(snap, eq, reqEq, record, vs);
+  return gradeAggressive(snap, eq, reqEq, record, vs, made);
 }
 
 // ── branches ────────────────────────────────────────────────────────────────
 
-function gradeCall(snap: DecisionSnapshot, eq: number, reqEq: number, bb: number, vs: string): DecisionGrade {
+function gradeCall(snap: DecisionSnapshot, eq: number, reqEq: number, bb: number, vs: string, made: string): DecisionGrade {
   const toCall = Math.min(snap.betFaced, snap.effectiveStack);
   const ev = evCall(eq, snap.potBefore, toCall);
   const evLossBb = Math.max(0, -ev) / bb;
   const against = vs ? ` against ${vs}` : '';
+  const held = made ? `${made} (~${pct(eq)} to win${against})` : `about a ${pct(eq)} chance to win${against}`;
   const note = ev >= 0
-    ? `Good call — about a ${pct(eq)} chance to win${against}, and you only needed ${pct(reqEq)} for the call to be worth it.`
-    : `Loose call — you put in ${toCall} chips with about a ${pct(eq)} chance to win${against}, but needed roughly ${pct(reqEq)}. You were behind.`;
+    ? `Good call — you had ${held}, and only needed ${pct(reqEq)} for the call to be worth it.`
+    : `Loose call — you put in ${toCall} chips with ${held}, but needed roughly ${pct(reqEq)}. You were behind.`;
   return { snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: ev, evLossBb, verdict: verdictFor(evLossBb), note };
 }
 
 function gradeFold(
-  snap: DecisionSnapshot, eq: number, reqEq: number, toCall: number, bb: number, vs: string, hadMerit: boolean,
+  snap: DecisionSnapshot, eq: number, reqEq: number, toCall: number, bb: number, vs: string, hadMerit: boolean, made: string,
 ): DecisionGrade {
   const wouldHaveBeen = evCall(eq, snap.potBefore, toCall);
   const against = vs ? ` against ${vs}` : '';
+  const held = made ? `${made} (~${pct(eq)} to win${against})` : `about a ${pct(eq)} chance to win${against}`;
   const grade = (evLossBb: number, note: string): DecisionGrade =>
     ({ snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: 0, evLossBb, verdict: verdictFor(evLossBb), note });
 
@@ -87,11 +91,11 @@ function gradeFold(
       `You folded a hand you could have seen for free — nobody had bet, so checking cost nothing. Never fold when you can check.`);
   }
   if (wouldHaveBeen <= 0) {
-    return grade(0, `Good fold — only about a ${pct(eq)} chance to win${against}, not enough to call the ${pct(reqEq)} price.`);
+    return grade(0, `Good fold — you had ${held}, not enough to call the ${pct(reqEq)} price.`);
   }
   if (hadMerit) {
     return grade(wouldHaveBeen / bb,
-      `Too tight — calling would have made money. You had about a ${pct(eq)} chance to win${against}, and only needed ${pct(reqEq)} to call.`);
+      `Too tight — folding gave up a winning hand. You had ${held}, and only needed ${pct(reqEq)} to call.`);
   }
   // +EV only in hindsight, but a weak hand with nothing to continue on: folding
   // to a bet is standard — you simply ran into a bluff this time. Grading it a
@@ -108,7 +112,7 @@ function gradeCheck(snap: DecisionSnapshot, eq: number, reqEq: number): Decision
 }
 
 function gradeAggressive(
-  snap: DecisionSnapshot, eq: number, reqEq: number, record: HandRecord, vs: string,
+  snap: DecisionSnapshot, eq: number, reqEq: number, record: HandRecord, vs: string, made: string,
 ): DecisionGrade {
   // Fold equity isn't priceable from hindsight cards, so we don't assign an
   // EV loss — we label intent. leaks.ts catches reckless bluffs.
@@ -127,7 +131,7 @@ function gradeAggressive(
   }
 
   if (eq >= 0.6) {
-    return mk('correct', `Strong bet — you likely had the best hand (~${pct(eq)} to win${against}), betting to get paid.`);
+    return mk('correct', `Strong bet — you had ${made || 'the best hand'} (~${pct(eq)} to win${against}), betting to get paid.`);
   }
   const hasDraw = hole.length === 2 && drawOuts([...hole, ...snap.board]) > 0;
   if (eq < 0.3) {
@@ -169,6 +173,27 @@ function hadContinuingMerit(snap: DecisionSnapshot, record: HandRecord): boolean
   const a = hole[0] as Card;
   const b = hole[1] as Card;
   return a.rank === b.rank || (Math.min(a.rank, b.rank) >= 10);
+}
+
+// Plain-English name for a hand category, so notes can say what you held.
+const HAND_PHRASE: Record<Category, string> = {
+  'royal-flush': 'a royal flush',
+  'straight-flush': 'a straight flush',
+  'four-of-a-kind': 'four of a kind',
+  'full-house': 'a full house',
+  flush: 'a flush',
+  straight: 'a straight',
+  'three-of-a-kind': 'three of a kind',
+  'two-pair': 'two pair',
+  pair: 'a pair',
+  'high-card': 'just high card',
+};
+
+/** What the hero made by this street ("a flush", "two pair"…), or '' preflop. */
+function heroHandText(snap: DecisionSnapshot, record: HandRecord): string {
+  const hole = record.holeCards[record.config.humanId] ?? [];
+  if (hole.length < 2 || snap.board.length < 3) return '';
+  return HAND_PHRASE[evaluate([...hole, ...snap.board]).category];
 }
 
 function verdictFor(evLossBb: number): Verdict {
@@ -216,7 +241,15 @@ function describeOpponents(snap: DecisionSnapshot, record: HandRecord): string {
     const id = ids[0] as string;
     const name = record.config.names[id] ?? 'them';
     const hole = record.holeCards[id];
-    return hole && hole.length === 2 ? `${name}’s ${cardText(hole[0] as Card)}${cardText(hole[1] as Card)}` : name;
+    if (!hole || hole.length !== 2) return name;
+    const cardsTxt = `${cardText(hole[0] as Card)}${cardText(hole[1] as Card)}`;
+    // Postflop, also name their made hand so "a flush beats two pair" is clear.
+    if (snap.board.length >= 3) {
+      const cat = evaluate([...hole, ...snap.board]).category;
+      const phrase = cat === 'high-card' ? 'high card' : HAND_PHRASE[cat];
+      return `${name}’s ${cardsTxt} (${phrase})`;
+    }
+    return `${name}’s ${cardsTxt}`;
   }
   return `the ${ids.length} players still in`;
 }

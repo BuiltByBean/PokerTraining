@@ -125,6 +125,21 @@ describe('decision grading', () => {
     expect(g?.note.toLowerCase()).toContain('bluff');
   });
 
+  it('names your made hand when you fold a winner (you folded a flush!)', () => {
+    // The real hand: K♦5♦ makes a K-high flush; villain has two pair. Folding
+    // the flush is a big mistake, and the note should say you had a flush.
+    const board = '6c 2d 8h Jd 8d';
+    const r = record({
+      hole: { P0: 'Kd 5d', P1: '6h Tc' },
+      board,
+      snapshots: [snap({ action: { kind: 'fold', amount: 0 }, street: 'river', board: cards(board), potBefore: 100, betFaced: 30, amountPutIn: 0, currentBet: 30 })],
+    });
+    const [g] = gradeHand(r, rng());
+    expect(g?.verdict === 'mistake' || g?.verdict === 'blunder').toBe(true);
+    expect(g?.note.toLowerCase()).toContain('flush');     // what you had
+    expect(g?.note.toLowerCase()).toContain('two pair');  // what they had
+  });
+
   it('still flags folding a real made hand that was ahead', () => {
     // Hero flopped top two pair and folds to a bet — that's a genuine leak.
     const board = 'Ah Kd 4c';
