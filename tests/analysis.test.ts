@@ -82,6 +82,9 @@ describe('decision grading', () => {
     const [g] = gradeHand(r, rng());
     expect(g?.verdict === 'mistake' || g?.verdict === 'blunder').toBe(true);
     expect(g?.note.toLowerCase()).toContain('too tight');
+    // The matchup is named so the equity claim is verifiable.
+    expect(g?.note).toContain('against');
+    expect(g?.note).toContain('Villain');
   });
 
   it('calls out folding a hand that could be checked for free', () => {

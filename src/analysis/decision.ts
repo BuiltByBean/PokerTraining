@@ -14,7 +14,7 @@
 import { equity } from '../engine/equity';
 import { evCall, requiredEquity } from '../engine/odds';
 import type { Rng } from '../engine/rng';
-import type { Card } from '../engine/types';
+import type { Card, Rank, Suit } from '../engine/types';
 import type { DecisionSnapshot } from './recorder';
 import type { HandRecord } from './record';
 
@@ -47,35 +47,39 @@ function gradeDecision(snap: DecisionSnapshot, record: HandRecord, rng: Rng): De
   const reqEq = snap.betFaced > 0 ? requiredEquity(toCall, snap.potBefore) : 0;
   const bb = record.config.bigBlind;
   const kind = snap.action.kind;
+  // Who the equity was measured against, so the % is verifiable in the note.
+  const vs = describeOpponents(snap, record);
 
-  if (kind === 'fold') return gradeFold(snap, eq, reqEq, toCall, bb);
+  if (kind === 'fold') return gradeFold(snap, eq, reqEq, toCall, bb, vs);
   if (kind === 'check') return gradeCheck(snap, eq, reqEq);
   if (kind === 'call' || (kind === 'allin' && snap.amountPutIn <= snap.betFaced)) {
-    return gradeCall(snap, eq, reqEq, bb);
+    return gradeCall(snap, eq, reqEq, bb, vs);
   }
   return gradeAggressive(snap, eq, reqEq);
 }
 
 // ── branches ────────────────────────────────────────────────────────────────
 
-function gradeCall(snap: DecisionSnapshot, eq: number, reqEq: number, bb: number): DecisionGrade {
+function gradeCall(snap: DecisionSnapshot, eq: number, reqEq: number, bb: number, vs: string): DecisionGrade {
   const toCall = Math.min(snap.betFaced, snap.effectiveStack);
   const ev = evCall(eq, snap.potBefore, toCall);
   const evLossBb = Math.max(0, -ev) / bb;
+  const against = vs ? ` against ${vs}` : '';
   const note = ev >= 0
-    ? `Good call — your hand had about a ${pct(eq)} chance to win, and you only needed ${pct(reqEq)} for the call to be worth it.`
-    : `Loose call — you put in ${toCall} chips with about a ${pct(eq)} chance to win, but needed roughly ${pct(reqEq)} to make it worth it. You were behind.`;
+    ? `Good call — about a ${pct(eq)} chance to win${against}, and you only needed ${pct(reqEq)} for the call to be worth it.`
+    : `Loose call — you put in ${toCall} chips with about a ${pct(eq)} chance to win${against}, but needed roughly ${pct(reqEq)}. You were behind.`;
   return { snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: ev, evLossBb, verdict: verdictFor(evLossBb), note };
 }
 
-function gradeFold(snap: DecisionSnapshot, eq: number, reqEq: number, toCall: number, bb: number): DecisionGrade {
+function gradeFold(snap: DecisionSnapshot, eq: number, reqEq: number, toCall: number, bb: number, vs: string): DecisionGrade {
   const wouldHaveBeen = evCall(eq, snap.potBefore, toCall);
   const evLossBb = Math.max(0, wouldHaveBeen) / bb;
+  const against = vs ? ` against ${vs}` : '';
   const note = snap.betFaced === 0
     ? `You folded a hand you could have seen for free — nobody had bet, so checking cost nothing. Never fold when you can check.`
     : wouldHaveBeen > 0
-      ? `Too tight — calling would have made money. Your hand had about a ${pct(eq)} chance to win and you only needed ${pct(reqEq)} to call.`
-      : `Good fold — only about a ${pct(eq)} chance to win, not enough to call the ${pct(reqEq)} price.`;
+      ? `Too tight — calling would have made money. You had about a ${pct(eq)} chance to win${against}, and only needed ${pct(reqEq)} to call.`
+      : `Good fold — only about a ${pct(eq)} chance to win${against}, not enough to call the ${pct(reqEq)} price.`;
   return { snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: 0, evLossBb, verdict: verdictFor(evLossBb), note };
 }
 
@@ -134,4 +138,31 @@ export function verdictLabel(v: Verdict): string {
 
 function pct(fraction: number): string {
   return `${Math.round(fraction * 100)}%`;
+}
+
+const RANK_TEXT: Record<Rank, string> = {
+  2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9',
+  10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A',
+};
+const SUIT_TEXT: Record<Suit, string> = { c: '♣', d: '♦', h: '♥', s: '♠' };
+
+function cardText(c: Card): string {
+  return `${RANK_TEXT[c.rank]}${SUIT_TEXT[c.suit]}`;
+}
+
+/**
+ * Who the hero's equity was measured against, named so the % is verifiable.
+ * Heads-up shows the opponent's actual hand ("Hedy's 5♦3♣"); multiway just
+ * counts them (listing every hand would be noise).
+ */
+function describeOpponents(snap: DecisionSnapshot, record: HandRecord): string {
+  const ids = snap.liveOpponentIds;
+  if (ids.length === 0) return '';
+  if (ids.length === 1) {
+    const id = ids[0] as string;
+    const name = record.config.names[id] ?? 'them';
+    const hole = record.holeCards[id];
+    return hole && hole.length === 2 ? `${name}’s ${cardText(hole[0] as Card)}${cardText(hole[1] as Card)}` : name;
+  }
+  return `the ${ids.length} players still in`;
 }

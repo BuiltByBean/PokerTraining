@@ -98,6 +98,22 @@ describe('equity — ties', () => {
   });
 });
 
+describe('equity — 7-high ahead of a bluff (the "84%" sanity check)', () => {
+  it('7-high is a big favourite over a weaker no-draw hand on the turn', () => {
+    // Hero 76, villain 53 on a dry K Q J 2 board (no straight/flush draws):
+    // villain can only catch up by pairing the 5 or 3 (~6 outs), so hero is a
+    // heavy favourite. This is the "you folded the best hand to a bluff" spot.
+    const r = heroEquity('7c 6h', '5d 3c', 'Ks Qh Jd 2s');
+    expect(r.method).toBe('exact');
+    expect(r.equities[0]?.equity).toBeGreaterThan(0.8);
+  });
+
+  it('but the same 7-high is crushed by top pair', () => {
+    const r = heroEquity('7c 6h', 'Qd 9h', 'Ks Qh Jd 2s');
+    expect(r.equities[0]?.equity).toBeLessThan(0.15);
+  });
+});
+
 describe('equity — multiway', () => {
   it('three contenders equities sum to 1', () => {
     const r = equity({
