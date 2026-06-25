@@ -87,6 +87,29 @@ describe('decision grading', () => {
     expect(g?.note).toContain('Villain');
   });
 
+  it('does not call a normal preflop raise a "bluff"', () => {
+    const r = record({
+      hole: { P0: 'Kh Td', P1: 'Ah As' }, // KTo open; low hindsight equity vs aces
+      board: '',
+      snapshots: [snap({ action: { kind: 'raise', amount: 6 }, street: 'preflop', board: [], potBefore: 3, betFaced: 2, amountPutIn: 6, currentBet: 2 })],
+    });
+    const [g] = gradeHand(r, rng());
+    expect(g?.note.toLowerCase()).not.toContain('bluff');
+    expect(g?.note.toLowerCase()).toContain('raise');
+  });
+
+  it('labels a bet with a draw a "semi-bluff", not a pure bluff', () => {
+    const board = 'Jc Th 9d';
+    const r = record({
+      hole: { P0: 'Kh Ts', P1: 'Jd Js' }, // middle pair + gutshot vs a set
+      board,
+      snapshots: [snap({ action: { kind: 'bet', amount: 64 }, street: 'flop', board: cards(board), potBefore: 100, betFaced: 0, amountPutIn: 64, currentBet: 0 })],
+    });
+    const [g] = gradeHand(r, rng());
+    expect(g?.hindsightEquity).toBeLessThan(0.3);
+    expect(g?.note.toLowerCase()).toContain('semi-bluff');
+  });
+
   it('does NOT punish folding a weak hand to a bluff (anti-resulting)', () => {
     // Hero 8-high (no pair, no draw) folds the flop to a bet; villain was
     // bluffing with 7-high, so hindsight equity is high — but folding is correct.

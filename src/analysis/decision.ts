@@ -14,6 +14,7 @@
 import { equity } from '../engine/equity';
 import { evaluate } from '../engine/evaluator';
 import { evCall, requiredEquity } from '../engine/odds';
+import { preflopStrength } from '../bots/strength';
 import type { Rng } from '../engine/rng';
 import type { Card, Rank, Suit } from '../engine/types';
 import { drawOuts } from './draws';
@@ -57,7 +58,7 @@ function gradeDecision(snap: DecisionSnapshot, record: HandRecord, rng: Rng): De
   if (kind === 'call' || (kind === 'allin' && snap.amountPutIn <= snap.betFaced)) {
     return gradeCall(snap, eq, reqEq, bb, vs);
   }
-  return gradeAggressive(snap, eq, reqEq);
+  return gradeAggressive(snap, eq, reqEq, record, vs);
 }
 
 // ── branches ────────────────────────────────────────────────────────────────
@@ -106,17 +107,35 @@ function gradeCheck(snap: DecisionSnapshot, eq: number, reqEq: number): Decision
   return { snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: 0, evLossBb: 0, verdict: 'correct', note };
 }
 
-function gradeAggressive(snap: DecisionSnapshot, eq: number, reqEq: number): DecisionGrade {
+function gradeAggressive(
+  snap: DecisionSnapshot, eq: number, reqEq: number, record: HandRecord, vs: string,
+): DecisionGrade {
   // Fold equity isn't priceable from hindsight cards, so we don't assign an
-  // EV loss here — we label intent. leaks.ts catches reckless bluffs.
-  let note: string;
-  let verdict: Verdict = 'correct';
-  if (eq >= 0.6) note = `Strong bet — you likely had the best hand (~${pct(eq)} chance to win), betting to get paid.`;
-  else if (eq < 0.3) {
-    note = `A bluff — only about a ${pct(eq)} chance to win, so this only works if they fold.`;
-    verdict = 'marginal';
-  } else note = `A thin bet — roughly a coin flip (~${pct(eq)} chance to win), part value and part bluff.`;
-  return { snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: 0, evLossBb: 0, verdict, note };
+  // EV loss — we label intent. leaks.ts catches reckless bluffs.
+  const against = vs ? ` against ${vs}` : '';
+  const hole = record.holeCards[record.config.humanId] ?? [];
+  const mk = (verdict: Verdict, note: string): DecisionGrade =>
+    ({ snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: 0, evLossBb: 0, verdict, note });
+
+  // Preflop: a raise is an open/3-bet. Judge it by starting-hand quality, not by
+  // hindsight equity (which is naturally low multiway) — and never call it a bluff.
+  if (snap.board.length < 3) {
+    const strong = hole.length === 2 && preflopStrength(hole).score >= 0.5;
+    return strong
+      ? mk('correct', `Raise — a fine hand to open with. (In hindsight just ${pct(eq)} to win${against}, but preflop pots are often multiway, so that number is naturally low.)`)
+      : mk('marginal', `Light raise — a weak hand to be raising (about ${pct(eq)} to win${against}). Fine as an occasional steal, risky as a habit.`);
+  }
+
+  if (eq >= 0.6) {
+    return mk('correct', `Strong bet — you likely had the best hand (~${pct(eq)} to win${against}), betting to get paid.`);
+  }
+  const hasDraw = hole.length === 2 && drawOuts([...hole, ...snap.board]) > 0;
+  if (eq < 0.3) {
+    return hasDraw
+      ? mk('correct', `A semi-bluff — behind for now (~${pct(eq)} to win${against}) but you have a draw that can improve, and it also wins if they fold.`)
+      : mk('marginal', `A bluff — only about a ${pct(eq)} chance to win${against}, so this only works if they fold.`);
+  }
+  return mk('correct', `A thin bet — roughly a coin flip (~${pct(eq)} to win${against})${hasDraw ? ', with a draw to back it up' : ''}; part value, part bluff.`);
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────

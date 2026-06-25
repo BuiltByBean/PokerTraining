@@ -183,8 +183,8 @@ function chasedDraw(record: HandRecord, g: DecisionGrade): Leak | undefined {
   const drawEquity = outsToEquity(outs, streetsToCome);
   if (drawEquity >= g.requiredEquity - 0.05) return undefined; // odds were fine
   return {
-    code: 'chased-draw', severity: 'warn', title: 'Chased a draw that wasn’t worth it',
-    explanation: `You called the ${s.street} hoping to complete a draw — about ${outs} cards would help you (~${pct(drawEquity)} chance), but the price needed ${pct(g.requiredEquity)}. Not worth the chase.`,
+    code: 'chased-draw', severity: 'warn', title: 'Paid too much chasing an unfinished hand',
+    explanation: `Your hand wasn't made yet — you needed a later card to complete a straight or flush (that unfinished hand is called a "draw"). Only about ${outs} cards in the deck finish it (~${pct(drawEquity)} chance on the next card), but the bet you called only pays off if you win ${pct(g.requiredEquity)} of the time. Paying that much for a long-shot card loses money over the long run — let these go unless the price is small.`,
   };
 }
 
