@@ -20,6 +20,13 @@ export interface Card {
 
 export type Street = 'preflop' | 'flop' | 'turn' | 'river' | 'showdown' | 'complete';
 
+/**
+ * Table position label. Lives here (engine vocabulary) so both the position
+ * math (positions.ts) and the bot view can speak it without a circular import.
+ * The ring runs BTN, SB, BB, then EP…CO back around to the button.
+ */
+export type Position = 'BTN' | 'SB' | 'BB' | 'EP' | 'MP' | 'CO';
+
 export type PlayerStatus = 'active' | 'folded' | 'allin' | 'sittingout';
 
 export interface Player {
@@ -94,4 +101,8 @@ export interface BotView {
   readonly toCall: number;
   readonly minRaise: number;
   readonly bigBlind: number;
+  /** This seat's position this hand (for position-aware ranges). */
+  readonly position: Position | undefined;
+  /** Last to act postflop among live players — lets the bot play in position. */
+  readonly inPosition: boolean;
 }

@@ -80,67 +80,83 @@ export interface SliderCallbacks {
 
 export function renderBetSlider(opts: SliderOptions, cb: SliderCallbacks): HTMLElement {
   const me = opts.state.players.find(p => p.id === opts.humanId) as Player;
+  const bb = opts.state.bigBlind;
   const owed = opts.state.currentBet - me.betThisStreet;
   const isOpening = owed === 0;
+  const isPreflop = opts.state.board.length === 0;
   const kind: Action['kind'] = isOpening ? 'bet' : 'raise';
 
   // Min and max are expressed in the SAME units as Action.amount: the player's
   // new total betThisStreet (not the delta).
   const min = isOpening
-    ? me.betThisStreet + Math.max(opts.state.bigBlind, opts.state.minRaise)
+    ? me.betThisStreet + Math.max(bb, opts.state.minRaise)
     : Math.min(me.betThisStreet + me.stack, opts.state.currentBet + opts.state.minRaise);
   const max = me.betThisStreet + me.stack;
   const pot = opts.state.players.reduce((s, p) => s + p.totalCommitted, 0);
+  const clampAmt = (n: number) => Math.max(min, Math.min(max, Math.round(n)));
 
-  let current = Math.max(min, Math.min(max, isOpening ? Math.max(min, Math.floor(pot * 0.66)) : min));
-
-  const amountLabel = el('div', { class: 'bet-slider__amount' }, fmtMoney(current));
+  let current = clampAmt(isPreflop ? bb * 2.5 : isOpening ? Math.floor(pot * 0.66) : min);
 
   const range = el('input', {
-    type: 'range',
-    min: String(min),
-    max: String(max),
-    value: String(current),
-    step: '1',
+    type: 'range', min: String(min), max: String(max), value: String(current), step: '1',
     class: 'bet-slider__range',
-    oninput: (e: Event) => {
-      current = Number((e.target as HTMLInputElement).value);
-      amountLabel.textContent = fmtMoney(current);
-    },
+  }) as HTMLInputElement;
+  const amountInput = el('input', {
+    type: 'number', min: String(min), max: String(max), value: String(current), step: '1',
+    class: 'bet-slider__amount', 'aria-label': 'Bet amount',
   }) as HTMLInputElement;
 
-  const setTo = (n: number) => {
-    const v = Math.max(min, Math.min(max, n));
-    range.value = String(v);
-    current = v;
-    amountLabel.textContent = fmtMoney(current);
+  const setTo = (n: number, keepInput = false): void => {
+    current = clampAmt(n);
+    range.value = String(current);
+    if (!keepInput) amountInput.value = String(current);
   };
+  range.addEventListener('input', () => setTo(Number(range.value)));
+  amountInput.addEventListener('input', () => {
+    const n = Number(amountInput.value);
+    if (Number.isFinite(n)) setTo(n, true); // don't fight the typist mid-entry
+  });
+  amountInput.addEventListener('change', () => { amountInput.value = String(current); });
 
-  const shortcuts = el(
-    'div',
-    { class: 'bet-slider__shortcuts' },
-    el('button', { class: 'bet-slider__shortcut', onclick: () => setTo(me.betThisStreet + Math.floor(pot * 0.5)) }, '½ Pot'),
-    el('button', { class: 'bet-slider__shortcut', onclick: () => setTo(me.betThisStreet + Math.floor(pot * 0.75)) }, '¾ Pot'),
-    el('button', { class: 'bet-slider__shortcut', onclick: () => setTo(me.betThisStreet + pot) }, 'Pot'),
-    el('button', { class: 'bet-slider__shortcut', onclick: () => setTo(max) }, 'All-in'),
+  const presets = el('div', { class: 'bet-slider__presets' }, ...presetButtons(isPreflop, me.betThisStreet, bb, pot, max, clampAmt, setTo));
+
+  const step = Math.max(1, bb);
+  const controls = el(
+    'div', { class: 'bet-slider__controls' },
+    el('button', { class: 'bet-slider__nudge', onclick: () => setTo(current - step) }, '−'),
+    range,
+    el('button', { class: 'bet-slider__nudge', onclick: () => setTo(current + step) }, '+'),
+    amountInput,
   );
 
-  const cancel = el('button', {
-    class: 'bet-slider__cancel',
-    onclick: () => cb.onCancel(),
-  }, 'Back');
+  const cancel = el('button', { class: 'bet-slider__cancel', onclick: () => cb.onCancel() }, 'Back');
+  const ok = el('button', { class: 'bet-slider__ok', onclick: () => cb.onConfirm({ kind, amount: current }) }, 'Confirm');
 
-  const ok = el('button', {
-    class: 'bet-slider__ok',
-    onclick: () => cb.onConfirm({ kind, amount: current }),
-  }, 'Confirm');
+  return el('div', { class: 'bet-slider' }, cancel, el('div', { class: 'bet-slider__body' }, presets, controls), ok);
+}
 
-  return el(
-    'div',
-    { class: 'bet-slider' },
-    cancel,
-    el('div', { class: 'bet-slider__row' }, range, shortcuts),
-    amountLabel,
-    ok,
-  );
+/**
+ * PokerStars-style quick-bet chips: big-blind multiples preflop (2×, 2.5×, …),
+ * pot fractions postflop (⅓, ½, ⅔, ¾, Pot), plus Min and All-in. Amounts are
+ * clamped to the legal range and de-duped so a short stack doesn't show the same
+ * value twice.
+ */
+function presetButtons(
+  isPreflop: boolean, betThisStreet: number, bb: number, pot: number, max: number,
+  clampAmt: (n: number) => number, setTo: (n: number) => void,
+): HTMLElement[] {
+  const potTotal = betThisStreet + pot;
+  const defs: ReadonlyArray<[string, number]> = isPreflop
+    ? [['Min', 0], ['2×BB', bb * 2], ['2.5×BB', bb * 2.5], ['3×BB', bb * 3], ['4×BB', bb * 4], ['Pot', potTotal], ['All-in', max]]
+    : [['Min', 0], ['⅓', betThisStreet + pot / 3], ['½', betThisStreet + pot * 0.5], ['⅔', betThisStreet + pot * 2 / 3], ['¾', betThisStreet + pot * 0.75], ['Pot', potTotal], ['All-in', max]];
+
+  const seen = new Set<number>();
+  const btns: HTMLElement[] = [];
+  for (const [label, raw] of defs) {
+    const val = clampAmt(raw);
+    if (seen.has(val)) continue;
+    seen.add(val);
+    btns.push(el('button', { class: 'bet-slider__preset', onclick: () => setTo(val) }, label));
+  }
+  return btns;
 }

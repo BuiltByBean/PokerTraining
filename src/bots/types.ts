@@ -11,12 +11,20 @@
 import type { Action, BotView } from '../engine/types';
 import type { Rng } from '../engine/rng';
 import type { SkillProfile } from './skill';
+import type { PlayerRead } from '../analysis/read';
+import type { BotArchetype } from './archetype';
 
 export interface BotContext {
   readonly view: BotView;
   readonly rng: Rng;
   /** Difficulty-derived dials; the table level sets it, jittered per seat. */
   readonly skill: SkillProfile;
+  /** History-built model of the human, or undefined with too little data yet. */
+  readonly read: PlayerRead | undefined;
+  /** 0-1 how hard to exploit the read (difficulty-scaled; 0 = play straight). */
+  readonly exploit: number;
+  /** This seat's personality; colours dials and exploit style. */
+  readonly archetype: BotArchetype | undefined;
 }
 
 export type Bot = (ctx: BotContext) => Action;
@@ -24,4 +32,5 @@ export type Bot = (ctx: BotContext) => Action;
 export interface BotPersona {
   readonly name: string;
   readonly bot: Bot;
+  readonly archetype: BotArchetype;
 }

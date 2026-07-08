@@ -13,9 +13,12 @@
 
 import { Hand } from './engine/game';
 import { cryptoSeed, mulberry32, type Rng } from './engine/rng';
-import type { Action, GameState, Player } from './engine/types';
+import type { Action, BotView, GameState, Player } from './engine/types';
+import { positionOf, isInPosition } from './engine/positions';
 import { PERSONAS } from './bots/registry';
 import { profileForLevel, jitter } from './bots/skill';
+import { applyArchetype } from './bots/archetype';
+import { buildPlayerRead, type PlayerRead } from './analysis/read';
 import { newRecorder, type Recorder } from './analysis/recorder';
 import { buildHandRecord, type HandConfig, type HandRecord } from './analysis/record';
 import { analyzeHand, type HandAnalysis } from './analysis/index';
@@ -56,6 +59,10 @@ interface AppState {
   analysisOpen: boolean;
   reviewRecord: HandRecord | undefined;
   historyCache: readonly HandRecord[];
+  /** All hands the bots exploit — stored history plus this session's, kept live. */
+  handHistory: readonly HandRecord[];
+  /** Model of the human the bots read; recomputed as hands accumulate. */
+  playerRead: PlayerRead | undefined;
   sliderOpen: boolean;
   botTimer: number | undefined;
   record: number;
@@ -91,6 +98,8 @@ const app: AppState = {
   analysisOpen: false,
   reviewRecord: undefined,
   historyCache: [],
+  handHistory: [],
+  playerRead: undefined,
   sliderOpen: false,
   botTimer: undefined,
   record: loadRecord(),
@@ -146,8 +155,15 @@ function startSession(config: GameConfig, resume: boolean): void {
   app.seats = buildSeats(config.playerCount);
   if (resume) hydrateFromSave();
   else { app.dealerIndex = 0; app.handNumber = 0; clearSave(); }
+  void refreshRead();
   app.screen = 'game';
   dealNextHand();
+}
+
+/** Pull stored history so the bots start the session already reading the human. */
+async function refreshRead(): Promise<void> {
+  app.handHistory = await getAllHands();
+  app.playerRead = buildPlayerRead(app.handHistory, app.humanId);
 }
 
 function buildSeats(count: number): Player[] {
@@ -213,11 +229,23 @@ function takeBotTurn(playerId: string): void {
 }
 
 function botAction(playerId: string): Action {
-  if (!app.hand) return { kind: 'fold', amount: 0 };
-  const skill = jitter(profileForLevel(app.config.difficulty), hashSeed(playerId));
-  return PERSONAS.find(p => p.name === seatById(playerId).name)?.bot({
-    view: buildBotView(app.hand.getState(), playerId), rng: app.rng, skill,
-  }) ?? { kind: 'fold', amount: 0 };
+  const persona = PERSONAS.find(p => p.name === seatById(playerId).name);
+  if (!persona || !app.hand) return { kind: 'fold', amount: 0 };
+  const base = jitter(profileForLevel(app.config.difficulty), hashSeed(playerId));
+  const skill = applyArchetype(base, persona.archetype);
+  return persona.bot({
+    view: buildBotView(app.hand.getState(), playerId),
+    rng: app.rng,
+    skill,
+    read: app.playerRead,
+    exploit: exploitIntensity(app.config.difficulty),
+    archetype: persona.archetype,
+  });
+}
+
+/** How hard bots exploit history, ramped by difficulty (off at ≤2, full at 10). */
+function exploitIntensity(difficulty: number): number {
+  return Math.max(0, Math.min(1, (difficulty - 2) / 8));
 }
 
 function applyAction(playerId: string, action: Action): void {
@@ -281,6 +309,11 @@ function finishHand(): void {
   app.analysis = analyzeHand(record);
   app.analysisOpen = true;
   void appendHand(record);
+
+  // Keep the bots' read current within the session — the hand you just played
+  // sharpens how they exploit you on the very next one.
+  app.handHistory = [...app.handHistory, record];
+  app.playerRead = buildPlayerRead(app.handHistory, app.humanId);
 
   updateRecord();
   persist();
@@ -444,15 +477,18 @@ function seatById(id: string): Player {
   return p;
 }
 
-function buildBotView(state: GameState, playerId: string) {
+function buildBotView(state: GameState, playerId: string): BotView {
   const self = state.players.find(p => p.id === playerId);
   if (!self) throw new Error(`Bot ${playerId} not seated`);
+  const isLive = (p: Player) => p.status === 'active' || p.status === 'allin';
   const opponents = state.players.filter(p => p.id !== playerId).map(({ hole: _h, ...rest }) => rest);
   const pot = state.players.reduce((s, p) => s + p.totalCommitted, 0);
   return {
     self, opponents, board: state.board, street: state.street, pot,
     toCall: Math.max(0, state.currentBet - self.betThisStreet),
     minRaise: state.minRaise, bigBlind: state.bigBlind,
+    position: positionOf(state.players, state.dealerIndex, playerId),
+    inPosition: isInPosition(state.players, state.dealerIndex, playerId, isLive),
   };
 }
 

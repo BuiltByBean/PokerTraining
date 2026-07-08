@@ -8,9 +8,11 @@
  * and stay put even after a player later folds.
  */
 
-import type { Player } from './types';
+import type { Player, Position } from './types';
 
-export type Position = 'BTN' | 'SB' | 'BB' | 'EP' | 'MP' | 'CO';
+// Position now lives in the engine vocabulary (types.ts); re-exported here so
+// existing importers (`from '../engine/positions'`) keep resolving it.
+export type { Position };
 
 export interface BlindSeats {
   readonly dealer: number;
