@@ -140,6 +140,24 @@ describe('decision grading', () => {
     expect(g?.note.toLowerCase()).toContain('two pair');  // what they had
   });
 
+  it('does NOT flag folding when the pair is on the board (playing the board)', () => {
+    // A♠5♠ on 6♣2♣J♠6♦ — the pair of sixes is the board's, shared by everyone;
+    // hero is playing the board with an ace kicker. Villain 9♦5♣ is also just
+    // playing the board, so hero is ahead in hindsight, but folding a turn bet
+    // here is standard — NOT a "big mistake".
+    const board = '6c 2c Js 6d';
+    const r = record({
+      hole: { P0: 'As 5s', P1: '9d 5c' },
+      board: '6c 2c Js 6d 3h',
+      snapshots: [snap({ action: { kind: 'fold', amount: 0 }, street: 'turn', board: cards(board), potBefore: 18, betFaced: 8, amountPutIn: 0, currentBet: 8 })],
+    });
+    const [g] = gradeHand(r, rng());
+    expect(g?.hindsightEquity).toBeGreaterThan(0.6); // ahead vs their exact cards
+    expect(g?.verdict).toBe('correct');              // ...but folding is standard
+    expect(g?.note.toLowerCase()).toContain('board'); // explains you played the board
+    expect(g?.note.toLowerCase()).not.toContain('too tight');
+  });
+
   it('still flags folding a real made hand that was ahead', () => {
     // Hero flopped top two pair and folds to a bet — that's a genuine leak.
     const board = 'Ah Kd 4c';

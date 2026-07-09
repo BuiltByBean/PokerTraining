@@ -53,14 +53,14 @@ function gradeDecision(snap: DecisionSnapshot, record: HandRecord, rng: Rng): De
   // Who the equity was measured against, and what the hero actually held, so
   // the % is verifiable and the player learns what their hand was.
   const vs = describeOpponents(snap, record);
-  const made = heroHandText(snap, record);
+  const hand = heroHand(snap, record);
 
-  if (kind === 'fold') return gradeFold(snap, eq, reqEq, toCall, bb, vs, hadContinuingMerit(snap, record), made);
+  if (kind === 'fold') return gradeFold(snap, eq, reqEq, toCall, bb, vs, hand);
   if (kind === 'check') return gradeCheck(snap, eq, reqEq);
   if (kind === 'call' || (kind === 'allin' && snap.amountPutIn <= snap.betFaced)) {
-    return gradeCall(snap, eq, reqEq, bb, vs, made);
+    return gradeCall(snap, eq, reqEq, bb, vs, hand.phrase);
   }
-  return gradeAggressive(snap, eq, reqEq, record, vs, made);
+  return gradeAggressive(snap, eq, reqEq, record, vs, hand.phrase);
 }
 
 // ── branches ────────────────────────────────────────────────────────────────
@@ -78,8 +78,9 @@ function gradeCall(snap: DecisionSnapshot, eq: number, reqEq: number, bb: number
 }
 
 function gradeFold(
-  snap: DecisionSnapshot, eq: number, reqEq: number, toCall: number, bb: number, vs: string, hadMerit: boolean, made: string,
+  snap: DecisionSnapshot, eq: number, reqEq: number, toCall: number, bb: number, vs: string, hand: HeroHand,
 ): DecisionGrade {
+  const { phrase: made, merit: hadMerit, playingBoard } = hand;
   const wouldHaveBeen = evCall(eq, snap.potBefore, toCall);
   const against = vs ? ` against ${vs}` : '';
   const held = made ? `${made} (~${pct(eq)} to win${against})` : `about a ${pct(eq)} chance to win${against}`;
@@ -97,9 +98,12 @@ function gradeFold(
     return grade(wouldHaveBeen / bb,
       `Too tight — folding gave up a winning hand. You had ${held}, and only needed ${pct(reqEq)} to call.`);
   }
-  // +EV only in hindsight, but a weak hand with nothing to continue on: folding
-  // to a bet is standard — you simply ran into a bluff this time. Grading it a
-  // mistake would be "resulting" (punishing a good decision for a bad-luck result).
+  // +EV only in hindsight, but nothing worth continuing on. Grading these a
+  // mistake would be "resulting" — punishing a fine fold for a bad-luck result.
+  if (playingBoard) {
+    return grade(0,
+      `Fine fold — the pair was on the board, so you were really just playing the board (no piece of your own). Folding that to a bet is standard: any pocket pair, any matching card, or a better kicker has you beaten. In hindsight you happened to be ahead${against} (~${pct(eq)} to win), but you can't call profitably without a real hand.`);
+  }
   return grade(0,
     `Fine fold — folding a weak hand to a bet is standard. In hindsight you were ahead${against} (~${pct(eq)} to win) because they were bluffing, but you can't profitably call here without a real hand or draw.`);
 }
@@ -156,23 +160,63 @@ function heroEquity(snap: DecisionSnapshot, record: HandRecord, rng: Rng): numbe
   return result.equities.find(e => e.playerId === heroId)?.equity ?? 0;
 }
 
+interface HeroHand {
+  /** Plain-English name of the hand the hero actually holds, '' if none/preflop. */
+  readonly phrase: string;
+  /** A real hand worth continuing with — a made hand using the hero's cards, or a draw. */
+  readonly merit: boolean;
+  /** The "made hand" is entirely on the board (e.g. a board pair) — hero has no piece. */
+  readonly playingBoard: boolean;
+}
+
 /**
- * Did the hero actually have something to continue with? Used so we don't grade
- * folding air as a "mistake" just because the opponent turned out to be bluffing.
- * Postflop: any made hand (pair+) or a real draw. Preflop: a genuinely strong
- * starting hand (a pair or two broadway cards) — folding trash is never a leak.
+ * What the hero actually had, and whether it was worth continuing with. The key
+ * subtlety: a pair (or better) sitting entirely on the board is NOT the hero's
+ * hand — everyone shares it — so folding it isn't a leak, and we must not call
+ * it "your pair". Merit means a made hand that uses the hero's hole cards, or a
+ * real draw. Preflop, merit is a strong starting hand (a pair or two broadway).
  */
-function hadContinuingMerit(snap: DecisionSnapshot, record: HandRecord): boolean {
+function heroHand(snap: DecisionSnapshot, record: HandRecord): HeroHand {
   const hole = record.holeCards[record.config.humanId] ?? [];
-  if (hole.length < 2) return false;
-  if (snap.board.length >= 3) {
-    const cards = [...hole, ...snap.board];
-    if (evaluate(cards).category !== 'high-card') return true;
-    return drawOuts(cards) > 0;
+  if (hole.length < 2) return { phrase: '', merit: false, playingBoard: false };
+  if (snap.board.length < 3) {
+    const a = hole[0] as Card;
+    const b = hole[1] as Card;
+    return { phrase: '', merit: a.rank === b.rank || Math.min(a.rank, b.rank) >= 10, playingBoard: false };
   }
-  const a = hole[0] as Card;
-  const b = hole[1] as Card;
-  return a.rank === b.rank || (Math.min(a.rank, b.rank) >= 10);
+  const cards = [...hole, ...snap.board];
+  const category = evaluate(cards).category;
+  if (category === 'high-card') return { phrase: '', merit: drawOuts(cards) > 0, playingBoard: false };
+  if (madeUsesHole(hole, snap.board)) return { phrase: HAND_PHRASE[category], merit: true, playingBoard: false };
+  const outs = drawOuts(cards);
+  return { phrase: '', merit: outs > 0, playingBoard: outs === 0 }; // made hand is all board
+}
+
+/** Does the hero's best hand actually use their hole cards, or is it just the board? */
+function madeUsesHole(hole: readonly Card[], board: readonly Card[]): boolean {
+  const { category, best5 } = evaluate([...hole, ...board]);
+  if (category === 'high-card') return false;
+  if (category === 'flush' || category === 'straight' || category === 'straight-flush' || category === 'royal-flush') {
+    const holeKeys = new Set(hole.map(cardKey));
+    return best5.some((c: Card) => holeKeys.has(cardKey(c))); // a hole card is in the winning five
+  }
+  // Pair family: the hero must hold a card of one of the paired/tripped/quad ranks.
+  const counts = new Map<Rank, number>();
+  for (const c of best5 as Card[]) counts.set(c.rank, (counts.get(c.rank) ?? 0) + 1);
+  const holeRanks = new Set(hole.map(c => c.rank));
+  for (const [rank, n] of counts) if (n >= 2 && holeRanks.has(rank)) return true;
+  return false;
+}
+
+/** Category phrase for a hand, honest about "playing the board". */
+function madeCategoryPhrase(hole: readonly Card[], board: readonly Card[]): string {
+  const category = evaluate([...hole, ...board]).category;
+  if (category === 'high-card') return 'high card';
+  return madeUsesHole(hole, board) ? HAND_PHRASE[category] : 'playing the board';
+}
+
+function cardKey(c: Card): string {
+  return `${c.rank}${c.suit}`;
 }
 
 // Plain-English name for a hand category, so notes can say what you held.
@@ -188,13 +232,6 @@ const HAND_PHRASE: Record<Category, string> = {
   pair: 'a pair',
   'high-card': 'just high card',
 };
-
-/** What the hero made by this street ("a flush", "two pair"…), or '' preflop. */
-function heroHandText(snap: DecisionSnapshot, record: HandRecord): string {
-  const hole = record.holeCards[record.config.humanId] ?? [];
-  if (hole.length < 2 || snap.board.length < 3) return '';
-  return HAND_PHRASE[evaluate([...hole, ...snap.board]).category];
-}
 
 function verdictFor(evLossBb: number): Verdict {
   if (evLossBb < 0.1) return 'correct';
@@ -243,11 +280,10 @@ function describeOpponents(snap: DecisionSnapshot, record: HandRecord): string {
     const hole = record.holeCards[id];
     if (!hole || hole.length !== 2) return name;
     const cardsTxt = `${cardText(hole[0] as Card)}${cardText(hole[1] as Card)}`;
-    // Postflop, also name their made hand so "a flush beats two pair" is clear.
+    // Postflop, also name their made hand so "a flush beats two pair" is clear
+    // (and honest when they, too, are only playing the board).
     if (snap.board.length >= 3) {
-      const cat = evaluate([...hole, ...snap.board]).category;
-      const phrase = cat === 'high-card' ? 'high card' : HAND_PHRASE[cat];
-      return `${name}’s ${cardsTxt} (${phrase})`;
+      return `${name}’s ${cardsTxt} (${madeCategoryPhrase(hole, snap.board)})`;
     }
     return `${name}’s ${cardsTxt}`;
   }
