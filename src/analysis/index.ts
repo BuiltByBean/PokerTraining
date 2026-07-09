@@ -1,11 +1,11 @@
 /*
  * Public analysis entry point. `analyzeHand` turns one immutable HandRecord into
  * the coaching payload the post-hand panel renders: per-decision grades, leak
- * flags, the hero's equity at each decision (for a sparkline), and a one-line
- * headline. Deterministic — equity MC is seeded from the record id.
+ * flags, the hero's hand strength at each decision (for a sparkline), and a
+ * one-line headline. Fully deterministic — everything is judged from the info
+ * the player had, so there's no randomness (no opponent-card equity) involved.
  */
 
-import { mulberry32, type Rng } from '../engine/rng';
 import type { Street } from '../engine/types';
 import { gradeHand, verdictLabel, type DecisionGrade } from './decision';
 import { detectHandLeaks, type Leak } from './leaks';
@@ -20,6 +20,7 @@ export { detectAggregateLeaks, detectStrengths } from './leaks';
 
 export interface EquityPoint {
   readonly street: Street;
+  /** 0-1 strength of the hero's hand at this decision (their view, not equity vs cards). */
   readonly equity: number;
 }
 
@@ -32,10 +33,10 @@ export interface HandAnalysis {
   readonly summary: string;
 }
 
-export function analyzeHand(record: HandRecord, rng: Rng = mulberry32(hashSeed(record.id))): HandAnalysis {
-  const grades = gradeHand(record, rng);
+export function analyzeHand(record: HandRecord): HandAnalysis {
+  const grades = gradeHand(record);
   const leaks = detectHandLeaks(record, grades);
-  const equityLine = grades.map(g => ({ street: g.snapshot.street, equity: g.hindsightEquity }));
+  const equityLine = grades.map(g => ({ street: g.snapshot.street, equity: g.handStrength }));
   return {
     record,
     grades,
@@ -58,14 +59,4 @@ function summarize(record: HandRecord, grades: readonly DecisionGrade[], leaks: 
   if (net > 0) return `Nice — you won $${net}${record.outcome.line === 'red' ? ' because everyone folded.' : '.'}`;
   if (net < 0) return `You lost $${Math.abs(net)}, but no clear mistakes — that's poker.`;
   return 'Nothing notable this hand.';
-}
-
-/** Cheap deterministic string hash → seed, so analysis is reproducible. */
-function hashSeed(id: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
 }

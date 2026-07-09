@@ -153,17 +153,12 @@ function def(r: { pct: number | undefined }): boolean {
 function stayedTooLong(g: DecisionGrade): Leak | undefined {
   const s = g.snapshot;
   if (s.action.kind !== 'call') return undefined;
-  const gap = g.requiredEquity - g.hindsightEquity;
-  if (s.street === 'river' && gap > 0.1 && g.hindsightEquity < 0.4) {
+  // Judged from YOUR hand, not theirs: calling a river bet with little more than
+  // high card or bottom pair is the classic "bad feeling but called anyway" spot.
+  if (s.street === 'river' && g.requiredEquity > 0.2 && g.handStrength < 0.35) {
     return {
-      code: 'stayed-too-long', severity: 'severe', title: 'Called the river when beaten',
-      explanation: `On the river you called with only about a ${pct(g.hindsightEquity)} chance to win, but you needed ${pct(g.requiredEquity)} for it to be worth it. This is the classic "I had a bad feeling but called anyway" spot — the one to cut out.`,
-    };
-  }
-  if (s.street === 'turn' && gap > 0.12 && g.hindsightEquity < 0.28) {
-    return {
-      code: 'stayed-too-long', severity: 'warn', title: 'Chased too far on the turn',
-      explanation: `You called the turn with only about a ${pct(g.hindsightEquity)} chance to win (you needed ${pct(g.requiredEquity)}) — too little to keep going.`,
+      code: 'stayed-too-long', severity: 'severe', title: 'Called the river light',
+      explanation: `On the river you called a bet holding a weak hand — little more than high card or bottom pair — for a ${pct(g.requiredEquity)} price. When your hand can only really beat a bluff and someone bets into you, folding is usually right. This is the spot to cut out.`,
     };
   }
   return undefined;
@@ -213,10 +208,10 @@ function bluffWinNotMerit(record: HandRecord, grades: readonly DecisionGrade[]):
     return k === 'bet' || k === 'raise' || k === 'allin';
   });
   const last = aggressive[aggressive.length - 1];
-  if (!last || last.hindsightEquity >= 0.4) return undefined;
+  if (!last || last.handStrength >= 0.45) return undefined;
   return {
     code: 'bluff-win-not-merit', severity: 'info', title: 'You won — but only because they folded',
-    explanation: `You took this pot without a showdown while your hand had only about a ${pct(last.hindsightEquity)} chance to win if called. The chips came from them folding, not from having the best hand — great if you meant to bluff, a warning sign if you thought you were ahead.`,
+    explanation: `You took this pot without a showdown while holding a weak hand — little better than high card. The chips came from them folding to your bet, not from a made hand. Great if you were bluffing on purpose; a warning sign if you thought you were ahead.`,
   };
 }
 

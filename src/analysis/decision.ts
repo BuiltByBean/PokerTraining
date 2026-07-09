@@ -1,23 +1,23 @@
 /*
- * Per-decision grading. For each of the hero's actions we reconstruct what it
- * faced (price, pot) and compute the hero's equity *against the opponents'
- * actual cards that were still live* — a hindsight, cards-known verdict. This
- * is exactly the lens the user asked for ("did I have any business being
- * there?"), so every note is explicit that it's hindsight, not a claim about
- * what was knowable at the time.
+ * Per-decision coaching — judged ONLY on the information the player actually had
+ * at the table: their hole cards, the board, the price (pot odds), their draw
+ * outs, position, and how many players are in. It deliberately does NOT look at
+ * the opponents' cards. Grading a fold a "mistake" because the villain turned
+ * out to be bluffing is "resulting" — it teaches nothing, because you never have
+ * that information when you act. The goal is to help the player make better
+ * decisions with what's knowable, not to score luck.
  *
- * Calls and folds get a clean EV-vs-fold grade (fold = 0 EV reference). Bets
- * and raises depend on fold equity, which hindsight can't price, so they get a
- * lighter value/bluff read here and the heavier judgement is left to leaks.ts.
+ * So: draws are judged by outs vs. price, made hands by their strength and the
+ * board, preflop calls/raises by hand quality and position. Every note is
+ * phrased in those terms.
  */
 
-import { equity } from '../engine/equity';
 import { evaluate, type Category } from '../engine/evaluator';
-import { evCall, requiredEquity } from '../engine/odds';
-import { preflopStrength } from '../bots/strength';
+import { requiredEquity, outsToEquity } from '../engine/odds';
+import { preflopStrength, postflopStrength } from '../bots/strength';
+import { drawOuts, hasFlushDraw, hasOpenEnder, hasGutshot } from './draws';
 import type { Rng } from '../engine/rng';
-import type { Card, Rank, Suit } from '../engine/types';
-import { drawOuts } from './draws';
+import type { Card, Rank } from '../engine/types';
 import type { DecisionSnapshot } from './recorder';
 import type { HandRecord } from './record';
 
@@ -25,171 +25,193 @@ export type Verdict = 'correct' | 'marginal' | 'mistake' | 'blunder';
 
 export interface DecisionGrade {
   readonly snapshot: DecisionSnapshot;
-  /** Hero equity vs the opponents' actual cards still live at this moment. */
-  readonly hindsightEquity: number;
+  /** 0-1 strength of the hero's hand from THEIR view (cards + board only). */
+  readonly handStrength: number;
   /** Break-even equity the price demanded (0 when checking). */
   readonly requiredEquity: number;
-  /** EV of the chosen action in chips (net vs folding). */
-  readonly evChips: number;
-  /** Big blinds lost vs the best alternative — drives the verdict. */
+  /** Estimated big blinds given up vs. the better play — drives verdict + cost. */
   readonly evLossBb: number;
   readonly verdict: Verdict;
   readonly note: string;
 }
 
-export function gradeHand(record: HandRecord, rng: Rng): DecisionGrade[] {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- rng kept for API symmetry
+export function gradeHand(record: HandRecord, _rng?: Rng): DecisionGrade[] {
   const heroId = record.config.humanId;
-  return record.snapshots
-    .filter(s => s.actorId === heroId)
-    .map(s => gradeDecision(s, record, rng));
+  return record.snapshots.filter(s => s.actorId === heroId).map(s => gradeDecision(s, record));
 }
 
-function gradeDecision(snap: DecisionSnapshot, record: HandRecord, rng: Rng): DecisionGrade {
-  const eq = heroEquity(snap, record, rng);
-  const toCall = Math.min(snap.betFaced, snap.effectiveStack);
-  const reqEq = snap.betFaced > 0 ? requiredEquity(toCall, snap.potBefore) : 0;
-  const bb = record.config.bigBlind;
+function gradeDecision(snap: DecisionSnapshot, record: HandRecord): DecisionGrade {
+  const read = decisionRead(snap, record);
   const kind = snap.action.kind;
-  // Who the equity was measured against, and what the hero actually held, so
-  // the % is verifiable and the player learns what their hand was.
-  const vs = describeOpponents(snap, record);
-  const hand = heroHand(snap, record);
-
-  if (kind === 'fold') return gradeFold(snap, eq, reqEq, toCall, bb, vs, hand);
-  if (kind === 'check') return gradeCheck(snap, eq, reqEq);
-  if (kind === 'call' || (kind === 'allin' && snap.amountPutIn <= snap.betFaced)) {
-    return gradeCall(snap, eq, reqEq, bb, vs, hand.phrase);
-  }
-  return gradeAggressive(snap, eq, reqEq, record, vs, hand.phrase);
+  if (kind === 'fold') return gradeFold(snap, read);
+  if (kind === 'check') return gradeCheck(snap, read);
+  if (kind === 'call' || (kind === 'allin' && snap.amountPutIn <= snap.betFaced)) return gradeCall(snap, read);
+  return gradeAggressive(snap, read);
 }
 
-// ── branches ────────────────────────────────────────────────────────────────
+// ── what the hero could see ──────────────────────────────────────────────────
 
-function gradeCall(snap: DecisionSnapshot, eq: number, reqEq: number, bb: number, vs: string, made: string): DecisionGrade {
-  const toCall = Math.min(snap.betFaced, snap.effectiveStack);
-  const ev = evCall(eq, snap.potBefore, toCall);
-  const evLossBb = Math.max(0, -ev) / bb;
-  const against = vs ? ` against ${vs}` : '';
-  const held = made ? `${made} (~${pct(eq)} to win${against})` : `about a ${pct(eq)} chance to win${against}`;
-  const note = ev >= 0
-    ? `Good call — you had ${held}, and only needed ${pct(reqEq)} for the call to be worth it.`
-    : `Loose call — you put in ${toCall} chips with ${held}, but needed roughly ${pct(reqEq)}. You were behind.`;
-  return { snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: ev, evLossBb, verdict: verdictFor(evLossBb), note };
+interface DecisionRead {
+  readonly preflop: boolean;
+  readonly strength: number;      // 0-1, from hero cards + board only
+  readonly reqEq: number;         // pot-odds price to continue
+  readonly outs: number;          // draw outs (0 if none / preflop)
+  readonly drawPhrase: string;    // "a flush draw", "an open-ended straight draw"…
+  readonly improveByRiver: number;// chance the draw completes by the river
+  readonly madePhrase: string;    // hero's made hand IF it uses their cards, else ''
+  readonly playingBoard: boolean; // "made" hand is entirely on the board
+  readonly players: number;       // contenders still in, incl. hero
 }
 
-function gradeFold(
-  snap: DecisionSnapshot, eq: number, reqEq: number, toCall: number, bb: number, vs: string, hand: HeroHand,
-): DecisionGrade {
-  const { phrase: made, merit: hadMerit, playingBoard } = hand;
-  const wouldHaveBeen = evCall(eq, snap.potBefore, toCall);
-  const against = vs ? ` against ${vs}` : '';
-  const held = made ? `${made} (~${pct(eq)} to win${against})` : `about a ${pct(eq)} chance to win${against}`;
-  const grade = (evLossBb: number, note: string): DecisionGrade =>
-    ({ snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: 0, evLossBb, verdict: verdictFor(evLossBb), note });
-
-  if (snap.betFaced === 0) {
-    return grade(Math.max(0, wouldHaveBeen) / bb,
-      `You folded a hand you could have seen for free — nobody had bet, so checking cost nothing. Never fold when you can check.`);
-  }
-  if (wouldHaveBeen <= 0) {
-    return grade(0, `Good fold — you had ${held}, not enough to call the ${pct(reqEq)} price.`);
-  }
-  if (hadMerit) {
-    return grade(wouldHaveBeen / bb,
-      `Too tight — folding gave up a winning hand. You had ${held}, and only needed ${pct(reqEq)} to call.`);
-  }
-  // +EV only in hindsight, but nothing worth continuing on. Grading these a
-  // mistake would be "resulting" — punishing a fine fold for a bad-luck result.
-  if (playingBoard) {
-    return grade(0,
-      `Fine fold — the pair was on the board, so you were really just playing the board (no piece of your own). Folding that to a bet is standard: any pocket pair, any matching card, or a better kicker has you beaten. In hindsight you happened to be ahead${against} (~${pct(eq)} to win), but you can't call profitably without a real hand.`);
-  }
-  return grade(0,
-    `Fine fold — folding a weak hand to a bet is standard. In hindsight you were ahead${against} (~${pct(eq)} to win) because they were bluffing, but you can't profitably call here without a real hand or draw.`);
-}
-
-function gradeCheck(snap: DecisionSnapshot, eq: number, reqEq: number): DecisionGrade {
-  const note = eq > 0.8 && snap.board.length >= 3
-    ? `You checked a strong hand (~${pct(eq)} chance to win) — betting probably would have won you more.`
-    : `Checked.`;
-  return { snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: 0, evLossBb: 0, verdict: 'correct', note };
-}
-
-function gradeAggressive(
-  snap: DecisionSnapshot, eq: number, reqEq: number, record: HandRecord, vs: string, made: string,
-): DecisionGrade {
-  // Fold equity isn't priceable from hindsight cards, so we don't assign an
-  // EV loss — we label intent. leaks.ts catches reckless bluffs.
-  const against = vs ? ` against ${vs}` : '';
+function decisionRead(snap: DecisionSnapshot, record: HandRecord): DecisionRead {
   const hole = record.holeCards[record.config.humanId] ?? [];
-  const mk = (verdict: Verdict, note: string): DecisionGrade =>
-    ({ snapshot: snap, hindsightEquity: eq, requiredEquity: reqEq, evChips: 0, evLossBb: 0, verdict, note });
-
-  // Preflop: a raise is an open/3-bet. Judge it by starting-hand quality, not by
-  // hindsight equity (which is naturally low multiway) — and never call it a bluff.
-  if (snap.board.length < 3) {
-    const strong = hole.length === 2 && preflopStrength(hole).score >= 0.5;
-    return strong
-      ? mk('correct', `Raise — a fine hand to open with. (In hindsight just ${pct(eq)} to win${against}, but preflop pots are often multiway, so that number is naturally low.)`)
-      : mk('marginal', `Light raise — a weak hand to be raising (about ${pct(eq)} to win${against}). Fine as an occasional steal, risky as a habit.`);
-  }
-
-  if (eq >= 0.6) {
-    return mk('correct', `Strong bet — you had ${made || 'the best hand'} (~${pct(eq)} to win${against}), betting to get paid.`);
-  }
-  const hasDraw = hole.length === 2 && drawOuts([...hole, ...snap.board]) > 0;
-  if (eq < 0.3) {
-    return hasDraw
-      ? mk('correct', `A semi-bluff — behind for now (~${pct(eq)} to win${against}) but you have a draw that can improve, and it also wins if they fold.`)
-      : mk('marginal', `A bluff — only about a ${pct(eq)} chance to win${against}, so this only works if they fold.`);
-  }
-  return mk('correct', `A thin bet — roughly a coin flip (~${pct(eq)} to win${against})${hasDraw ? ', with a draw to back it up' : ''}; part value, part bluff.`);
+  const preflop = snap.board.length < 3;
+  const known = hole.length === 2;
+  const strength = known ? (preflop ? preflopStrength(hole).score : postflopStrength(hole, snap.board).score) : 0;
+  const toCall = Math.min(snap.betFaced, snap.effectiveStack);
+  const cards = [...hole, ...snap.board];
+  const outs = preflop || !known ? 0 : drawOuts(cards);
+  const hand = heroHand(snap, record);
+  return {
+    preflop,
+    strength,
+    reqEq: snap.betFaced > 0 ? requiredEquity(toCall, snap.potBefore) : 0,
+    outs,
+    drawPhrase: preflop ? '' : drawPhrase(cards),
+    improveByRiver: outs > 0 ? outsToEquity(outs, snap.street === 'flop' ? 2 : 1) : 0,
+    madePhrase: hand.phrase,
+    playingBoard: hand.playingBoard,
+    players: snap.numActivePlayers,
+  };
 }
 
-// ── helpers ─────────────────────────────────────────────────────────────────
+// ── branches ─────────────────────────────────────────────────────────────────
 
-function heroEquity(snap: DecisionSnapshot, record: HandRecord, rng: Rng): number {
-  const heroId = record.config.humanId;
-  const heroHole = record.holeCards[heroId];
-  if (!heroHole || heroHole.length < 2) return 0;
-  const opponents = snap.liveOpponentIds
-    .map(id => ({ id, hole: record.holeCards[id] ?? [] }))
-    .filter(o => o.hole.length === 2) as { id: string; hole: readonly Card[] }[];
-  if (opponents.length === 0) return 1; // uncontested
-  const result = equity({ players: [{ id: heroId, hole: heroHole }, ...opponents], board: snap.board, rng });
-  return result.equities.find(e => e.playerId === heroId)?.equity ?? 0;
+function gradeFold(snap: DecisionSnapshot, read: DecisionRead): DecisionGrade {
+  const price = pct(read.reqEq);
+  if (snap.betFaced === 0) {
+    return mk(snap, read, 0.6, `You folded for free — nobody had bet, so checking cost nothing. Never fold when you can just check.`);
+  }
+  if (read.preflop) {
+    return read.strength >= 0.85
+      ? mk(snap, read, 0.5, `Too tight — that's a premium hand; folding it before the flop gives up a clear edge.`)
+      : mk(snap, read, 0, `Good fold — not a hand worth continuing with before the flop.`);
+  }
+  if (read.madePhrase && read.strength >= 0.62) {
+    return mk(snap, read, 1, `Too tight — you folded ${read.madePhrase}, a strong hand. Facing a ${price} price that's usually a call or a raise, not a fold.`);
+  }
+  if (read.outs >= 8) {
+    return mk(snap, read, 0.3, `A bit tight — you folded ${read.drawPhrase} (~${read.outs} outs, about ${pct(read.improveByRiver)} to complete by the river). A draw that big is usually worth continuing for a ${price} price.`);
+  }
+  if (read.playingBoard) {
+    return mk(snap, read, 0, `Fine fold — the pair was on the board, so you were only playing the board (no piece of your own). Folding that to a bet is standard.`);
+  }
+  return mk(snap, read, 0, `Good fold — ${held(read)} isn't worth continuing for a ${price} price against ${oppText(read.players)}.`);
 }
+
+function gradeCall(snap: DecisionSnapshot, read: DecisionRead): DecisionGrade {
+  const price = pct(read.reqEq);
+  if (read.preflop) {
+    return read.strength >= 0.4
+      ? mk(snap, read, 0, `Reasonable call — ${preflopTier(read.strength)} is fine to continue with for this price.`)
+      : mk(snap, read, 0.3, `Loose call — ${preflopTier(read.strength)} is loose to call a raise with, especially ${posText(snap)}. Hands like this quietly bleed chips.`);
+  }
+  if (read.madePhrase && read.strength >= 0.55) {
+    return mk(snap, read, 0, `Good call — you had ${read.madePhrase}, strong enough to continue for a ${price} price.`);
+  }
+  if (read.outs >= 8) {
+    const priced = read.improveByRiver >= read.reqEq;
+    return mk(snap, read, priced ? 0 : 0.3,
+      `${priced ? 'Good call' : 'Thin call'} — ${read.drawPhrase} (~${read.outs} outs, about ${pct(read.improveByRiver)} to complete). You needed ${price}${priced ? ', so the price was right.' : ' — a touch rich, but a draw this big is fine to peel.'}`);
+  }
+  if (read.outs > 0 && read.improveByRiver >= read.reqEq) {
+    return mk(snap, read, 0, `Okay call — ${read.drawPhrase} priced in (about ${pct(read.improveByRiver)} to hit vs. the ${price} you needed).`);
+  }
+  return mk(snap, read, 1, `Loose call — you called ${snap.betFaced} with ${held(read)}, needing about ${price}. That's not enough to continue — fold these.`);
+}
+
+function gradeCheck(snap: DecisionSnapshot, read: DecisionRead): DecisionGrade {
+  const note = read.strength >= 0.7 && snap.board.length >= 3
+    ? `You checked ${read.madePhrase || 'a strong hand'} — betting for value probably wins you more.`
+    : `Checked.`;
+  return { snapshot: snap, handStrength: read.strength, requiredEquity: read.reqEq, evLossBb: 0, verdict: 'correct', note };
+}
+
+function gradeAggressive(snap: DecisionSnapshot, read: DecisionRead): DecisionGrade {
+  const g = (verdict: Verdict, note: string): DecisionGrade =>
+    ({ snapshot: snap, handStrength: read.strength, requiredEquity: read.reqEq, evLossBb: 0, verdict, note });
+  if (read.preflop) {
+    return read.strength >= 0.5
+      ? g('correct', `Raise — a fine hand to open or 3-bet with.`)
+      : g('marginal', `Light raise — ${preflopTier(read.strength)} to be raising. Fine as an occasional steal, risky as a habit.`);
+  }
+  if (read.madePhrase && read.strength >= 0.6) {
+    return g('correct', `Strong bet — you had ${read.madePhrase}, betting to get value.`);
+  }
+  if (read.outs >= 8) {
+    return g('correct', `A semi-bluff — ${read.drawPhrase} that can still improve, and it wins right now if they fold. A good spot to apply pressure.`);
+  }
+  if (read.strength < 0.3) {
+    return g('marginal', `A bluff — not much of a hand (${held(read)}), so this only works if they fold. Pick your spots.`);
+  }
+  return g('correct', `A thin bet — a middling hand${read.outs > 0 ? ', with a draw to back it up' : ''}; part value, part pressure.`);
+}
+
+// ── phrasing helpers ─────────────────────────────────────────────────────────
+
+function mk(snap: DecisionSnapshot, read: DecisionRead, evLossBb: number, note: string): DecisionGrade {
+  return { snapshot: snap, handStrength: read.strength, requiredEquity: read.reqEq, evLossBb, verdict: verdictFor(evLossBb), note };
+}
+
+/** Best short description of what the hero was holding, from their own view. */
+function held(read: DecisionRead): string {
+  if (read.madePhrase && read.drawPhrase) return `${read.madePhrase} with ${read.drawPhrase}`;
+  if (read.madePhrase) return read.madePhrase;
+  if (read.drawPhrase) return read.drawPhrase;
+  if (read.playingBoard) return 'only the board (no pair of your own)';
+  return 'just high card';
+}
+
+function preflopTier(strength: number): string {
+  if (strength >= 0.62) return 'a strong starting hand';
+  if (strength >= 0.4) return 'a playable starting hand';
+  return 'a weak starting hand';
+}
+
+function posText(snap: DecisionSnapshot): string {
+  return snap.inPosition ? 'in position' : 'out of position';
+}
+
+function oppText(players: number): string {
+  const n = Math.max(0, players - 1);
+  return `${n} opponent${n === 1 ? '' : 's'}`;
+}
+
+/** Name the draw(s) the hero holds, from their cards + board. */
+function drawPhrase(cards: readonly Card[]): string {
+  const parts: string[] = [];
+  if (hasFlushDraw(cards)) parts.push('a flush draw');
+  if (hasOpenEnder(cards)) parts.push('an open-ended straight draw');
+  else if (hasGutshot(cards)) parts.push('a gutshot straight draw');
+  return parts.join(' plus ');
+}
+
+// ── made-hand detection (uses the hero's cards, not the board's) ──────────────
 
 interface HeroHand {
-  /** Plain-English name of the hand the hero actually holds, '' if none/preflop. */
-  readonly phrase: string;
-  /** A real hand worth continuing with — a made hand using the hero's cards, or a draw. */
-  readonly merit: boolean;
-  /** The "made hand" is entirely on the board (e.g. a board pair) — hero has no piece. */
-  readonly playingBoard: boolean;
+  readonly phrase: string;        // '' if no made hand of the hero's own
+  readonly playingBoard: boolean; // a made hand that's entirely on the board
 }
 
-/**
- * What the hero actually had, and whether it was worth continuing with. The key
- * subtlety: a pair (or better) sitting entirely on the board is NOT the hero's
- * hand — everyone shares it — so folding it isn't a leak, and we must not call
- * it "your pair". Merit means a made hand that uses the hero's hole cards, or a
- * real draw. Preflop, merit is a strong starting hand (a pair or two broadway).
- */
+/** What the hero actually made, honest about "playing the board". */
 function heroHand(snap: DecisionSnapshot, record: HandRecord): HeroHand {
   const hole = record.holeCards[record.config.humanId] ?? [];
-  if (hole.length < 2) return { phrase: '', merit: false, playingBoard: false };
-  if (snap.board.length < 3) {
-    const a = hole[0] as Card;
-    const b = hole[1] as Card;
-    return { phrase: '', merit: a.rank === b.rank || Math.min(a.rank, b.rank) >= 10, playingBoard: false };
-  }
-  const cards = [...hole, ...snap.board];
-  const category = evaluate(cards).category;
-  if (category === 'high-card') return { phrase: '', merit: drawOuts(cards) > 0, playingBoard: false };
-  if (madeUsesHole(hole, snap.board)) return { phrase: HAND_PHRASE[category], merit: true, playingBoard: false };
-  const outs = drawOuts(cards);
-  return { phrase: '', merit: outs > 0, playingBoard: outs === 0 }; // made hand is all board
+  if (hole.length < 2 || snap.board.length < 3) return { phrase: '', playingBoard: false };
+  const category = evaluate([...hole, ...snap.board]).category;
+  if (category === 'high-card') return { phrase: '', playingBoard: false };
+  if (madeUsesHole(hole, snap.board)) return { phrase: HAND_PHRASE[category], playingBoard: false };
+  return { phrase: '', playingBoard: drawOuts([...hole, ...snap.board]) === 0 };
 }
 
 /** Does the hero's best hand actually use their hole cards, or is it just the board? */
@@ -206,13 +228,6 @@ function madeUsesHole(hole: readonly Card[], board: readonly Card[]): boolean {
   const holeRanks = new Set(hole.map(c => c.rank));
   for (const [rank, n] of counts) if (n >= 2 && holeRanks.has(rank)) return true;
   return false;
-}
-
-/** Category phrase for a hand, honest about "playing the board". */
-function madeCategoryPhrase(hole: readonly Card[], board: readonly Card[]): string {
-  const category = evaluate([...hole, ...board]).category;
-  if (category === 'high-card') return 'high card';
-  return madeUsesHole(hole, board) ? HAND_PHRASE[category] : 'playing the board';
 }
 
 function cardKey(c: Card): string {
@@ -232,6 +247,8 @@ const HAND_PHRASE: Record<Category, string> = {
   pair: 'a pair',
   'high-card': 'just high card',
 };
+
+// ── verdict ──────────────────────────────────────────────────────────────────
 
 function verdictFor(evLossBb: number): Verdict {
   if (evLossBb < 0.1) return 'correct';
@@ -254,38 +271,4 @@ export function verdictLabel(v: Verdict): string {
 
 function pct(fraction: number): string {
   return `${Math.round(fraction * 100)}%`;
-}
-
-const RANK_TEXT: Record<Rank, string> = {
-  2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9',
-  10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A',
-};
-const SUIT_TEXT: Record<Suit, string> = { c: '♣', d: '♦', h: '♥', s: '♠' };
-
-function cardText(c: Card): string {
-  return `${RANK_TEXT[c.rank]}${SUIT_TEXT[c.suit]}`;
-}
-
-/**
- * Who the hero's equity was measured against, named so the % is verifiable.
- * Heads-up shows the opponent's actual hand ("Hedy's 5♦3♣"); multiway just
- * counts them (listing every hand would be noise).
- */
-function describeOpponents(snap: DecisionSnapshot, record: HandRecord): string {
-  const ids = snap.liveOpponentIds;
-  if (ids.length === 0) return '';
-  if (ids.length === 1) {
-    const id = ids[0] as string;
-    const name = record.config.names[id] ?? 'them';
-    const hole = record.holeCards[id];
-    if (!hole || hole.length !== 2) return name;
-    const cardsTxt = `${cardText(hole[0] as Card)}${cardText(hole[1] as Card)}`;
-    // Postflop, also name their made hand so "a flush beats two pair" is clear
-    // (and honest when they, too, are only playing the board).
-    if (snap.board.length >= 3) {
-      return `${name}’s ${cardsTxt} (${madeCategoryPhrase(hole, snap.board)})`;
-    }
-    return `${name}’s ${cardsTxt}`;
-  }
-  return `the ${ids.length} players still in`;
 }

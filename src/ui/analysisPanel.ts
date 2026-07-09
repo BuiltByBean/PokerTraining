@@ -45,7 +45,7 @@ function equityStrip(a: HandAnalysis): HTMLElement {
     el('div', { class: 'eqbar', title: `${pt.street}: ${Math.round(pt.equity * 100)}%` },
       el('div', { class: 'eqbar__fill', style: `height:${Math.round(pt.equity * 100)}%` })));
   return el('div', { class: 'panel__equity' },
-    el('div', { class: 'panel__equity-label' }, 'Your chance of winning at each decision'),
+    el('div', { class: 'panel__equity-label' }, 'How strong your hand was at each decision'),
     el('div', { class: 'eqstrip' }, ...bars));
 }
 

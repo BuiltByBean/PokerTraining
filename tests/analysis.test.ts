@@ -50,41 +50,43 @@ function record(o: {
 }
 
 describe('decision grading', () => {
-  it('flags a hopeless river call as a blunder', () => {
+  it('flags calling a river bet with a weak hand as a mistake (your hand, not theirs)', () => {
     const r = record({
       hole: { P0: '2c 3d', P1: 'Ac Ad' },
       board: 'Ks Qh 7d 4s 9c',
       snapshots: [snap({ action: { kind: 'call', amount: 50 }, street: 'river', board: cards('Ks Qh 7d 4s 9c'), potBefore: 150, betFaced: 50, amountPutIn: 50, currentBet: 50 })],
     });
-    const [g] = gradeHand(r, rng());
-    expect(g?.hindsightEquity).toBe(0);
+    const [g] = gradeHand(r);
+    expect(g?.handStrength).toBeLessThan(0.3); // just high card
     expect(g?.requiredEquity).toBeCloseTo(0.25, 2);
-    expect(g?.verdict).toBe('blunder');
+    expect(g?.verdict).toBe('mistake');
+    expect(g?.note.toLowerCase()).toContain('loose call');
+    expect(g?.note.toLowerCase()).not.toContain('ac'); // never references villain's cards
   });
 
-  it('rewards a correct value call', () => {
+  it('rewards a strong value call', () => {
     const r = record({
       hole: { P0: 'Ah Ad', P1: 'Kc Qc' },
       board: 'As Kd 7h 2c 9s',
       snapshots: [snap({ action: { kind: 'call', amount: 20 }, street: 'river', board: cards('As Kd 7h 2c 9s'), potBefore: 100, betFaced: 20, amountPutIn: 20, currentBet: 20 })],
     });
-    const [g] = gradeHand(r, rng());
-    expect(g?.hindsightEquity).toBe(1); // top set crushes a pair of kings
+    const [g] = gradeHand(r);
+    expect(g?.handStrength).toBeGreaterThan(0.6); // a set of aces
     expect(g?.verdict).toBe('correct');
+    expect(g?.note.toLowerCase()).toContain('three of a kind');
   });
 
-  it('flags folding a hugely +EV call as a mistake', () => {
+  it('flags folding a strong made hand as too tight (from your own hand)', () => {
     const r = record({
       hole: { P0: 'Ah Ad', P1: '2c 7d' },
       board: 'As 9h 4c 5s Jd',
       snapshots: [snap({ action: { kind: 'fold', amount: 0 }, street: 'river', board: cards('As 9h 4c 5s Jd'), potBefore: 100, betFaced: 10, amountPutIn: 0, currentBet: 10 })],
     });
-    const [g] = gradeHand(r, rng());
-    expect(g?.verdict === 'mistake' || g?.verdict === 'blunder').toBe(true);
+    const [g] = gradeHand(r);
+    expect(g?.verdict).toBe('mistake');
     expect(g?.note.toLowerCase()).toContain('too tight');
-    // The matchup is named so the equity claim is verifiable.
-    expect(g?.note).toContain('against');
-    expect(g?.note).toContain('Villain');
+    expect(g?.note.toLowerCase()).toContain('three of a kind'); // names YOUR hand
+    expect(g?.note.toLowerCase()).not.toContain('against'); // not vs their cards
   });
 
   it('does not call a normal preflop raise a "bluff"', () => {
@@ -98,76 +100,91 @@ describe('decision grading', () => {
     expect(g?.note.toLowerCase()).toContain('raise');
   });
 
-  it('labels a bet with a draw a "semi-bluff", not a pure bluff', () => {
-    const board = 'Jc Th 9d';
+  it('labels a bet with a big draw a "semi-bluff", not a pure bluff', () => {
+    const board = 'Js 5s 2c';
     const r = record({
-      hole: { P0: 'Kh Ts', P1: 'Jd Js' }, // middle pair + gutshot vs a set
+      hole: { P0: 'Ks Qs', P1: 'Jd Js' }, // flush draw, no pair
       board,
       snapshots: [snap({ action: { kind: 'bet', amount: 64 }, street: 'flop', board: cards(board), potBefore: 100, betFaced: 0, amountPutIn: 64, currentBet: 0 })],
     });
-    const [g] = gradeHand(r, rng());
-    expect(g?.hindsightEquity).toBeLessThan(0.3);
+    const [g] = gradeHand(r);
     expect(g?.note.toLowerCase()).toContain('semi-bluff');
+    expect(g?.note.toLowerCase()).toContain('flush draw'); // names YOUR draw
   });
 
-  it('does NOT punish folding a weak hand to a bluff (anti-resulting)', () => {
-    // Hero 8-high (no pair, no draw) folds the flop to a bet; villain was
-    // bluffing with 7-high, so hindsight equity is high — but folding is correct.
+  it('does not punish folding a weak hand (judged on your hand, not theirs)', () => {
+    // Hero 8-high, no pair, no draw — folding the flop to a bet is standard,
+    // regardless of what the villain turned out to have.
     const board = 'Jd Ac Ks';
     const r = record({
       hole: { P0: '8h 6h', P1: '7d 2c' },
       board,
       snapshots: [snap({ action: { kind: 'fold', amount: 0 }, street: 'flop', board: cards(board), potBefore: 40, betFaced: 10, amountPutIn: 0, currentBet: 10 })],
     });
-    const [g] = gradeHand(r, rng());
-    expect(g?.hindsightEquity).toBeGreaterThan(0.6); // would have won in hindsight
-    expect(g?.verdict).toBe('correct');               // ...but folding was right
-    expect(g?.note.toLowerCase()).toContain('bluff');
+    const [g] = gradeHand(r);
+    expect(g?.verdict).toBe('correct');
+    expect(g?.note.toLowerCase()).toContain('good fold');
+    expect(g?.note.toLowerCase()).toContain('high card');
   });
 
   it('names your made hand when you fold a winner (you folded a flush!)', () => {
-    // The real hand: K♦5♦ makes a K-high flush; villain has two pair. Folding
-    // the flush is a big mistake, and the note should say you had a flush.
+    // K♦5♦ makes a K-high flush — folding it is too tight, and the note should
+    // say YOU had a flush (never mentioning the opponent's cards).
     const board = '6c 2d 8h Jd 8d';
     const r = record({
       hole: { P0: 'Kd 5d', P1: '6h Tc' },
       board,
       snapshots: [snap({ action: { kind: 'fold', amount: 0 }, street: 'river', board: cards(board), potBefore: 100, betFaced: 30, amountPutIn: 0, currentBet: 30 })],
     });
-    const [g] = gradeHand(r, rng());
-    expect(g?.verdict === 'mistake' || g?.verdict === 'blunder').toBe(true);
-    expect(g?.note.toLowerCase()).toContain('flush');     // what you had
-    expect(g?.note.toLowerCase()).toContain('two pair');  // what they had
+    const [g] = gradeHand(r);
+    expect(g?.verdict).toBe('mistake');
+    expect(g?.note.toLowerCase()).toContain('flush');    // what you had
+    expect(g?.note.toLowerCase()).toContain('too tight');
+    expect(g?.note.toLowerCase()).not.toContain('two pair'); // never their hand
   });
 
   it('does NOT flag folding when the pair is on the board (playing the board)', () => {
     // A♠5♠ on 6♣2♣J♠6♦ — the pair of sixes is the board's, shared by everyone;
-    // hero is playing the board with an ace kicker. Villain 9♦5♣ is also just
-    // playing the board, so hero is ahead in hindsight, but folding a turn bet
-    // here is standard — NOT a "big mistake".
+    // hero is playing the board with an ace kicker. Folding a turn bet here is
+    // standard — NOT a mistake — and the review must not reference the opponent.
     const board = '6c 2c Js 6d';
     const r = record({
       hole: { P0: 'As 5s', P1: '9d 5c' },
       board: '6c 2c Js 6d 3h',
       snapshots: [snap({ action: { kind: 'fold', amount: 0 }, street: 'turn', board: cards(board), potBefore: 18, betFaced: 8, amountPutIn: 0, currentBet: 8 })],
     });
-    const [g] = gradeHand(r, rng());
-    expect(g?.hindsightEquity).toBeGreaterThan(0.6); // ahead vs their exact cards
-    expect(g?.verdict).toBe('correct');              // ...but folding is standard
+    const [g] = gradeHand(r);
+    expect(g?.verdict).toBe('correct');              // folding is standard
     expect(g?.note.toLowerCase()).toContain('board'); // explains you played the board
     expect(g?.note.toLowerCase()).not.toContain('too tight');
   });
 
-  it('still flags folding a real made hand that was ahead', () => {
-    // Hero flopped top two pair and folds to a bet — that's a genuine leak.
+  it('still flags folding a real made hand as too tight', () => {
+    // Hero flopped top two pair and folds to a bet — a genuine, available-info leak.
     const board = 'Ah Kd 4c';
     const r = record({
       hole: { P0: 'Ac Kc', P1: '7d 2h' },
       board,
       snapshots: [snap({ action: { kind: 'fold', amount: 0 }, street: 'flop', board: cards(board), potBefore: 40, betFaced: 10, amountPutIn: 0, currentBet: 10 })],
     });
-    const [g] = gradeHand(r, rng());
-    expect(g?.verdict === 'mistake' || g?.verdict === 'blunder').toBe(true);
+    const [g] = gradeHand(r);
+    expect(g?.verdict).toBe('mistake');
+    expect(g?.note.toLowerCase()).toContain('two pair');
+  });
+
+  it('flags a big draw folded for a good price as a bit tight', () => {
+    // Nut flush draw + gutshot on the flop, folded to a small bet — folding a
+    // draw this big is too passive, explained via YOUR outs, not their cards.
+    const board = '7s 5s 4d';
+    const r = record({
+      hole: { P0: 'As 2s', P1: 'Qs Ts' },
+      board,
+      snapshots: [snap({ action: { kind: 'fold', amount: 0 }, street: 'flop', board: cards(board), potBefore: 30, betFaced: 10, amountPutIn: 0, currentBet: 10 })],
+    });
+    const [g] = gradeHand(r);
+    expect(g?.note.toLowerCase()).toContain('outs');
+    expect(g?.note.toLowerCase()).toContain('draw');
+    expect(g?.note.toLowerCase()).not.toContain('big mistake');
   });
 
   it('calls out folding a hand that could be checked for free', () => {
@@ -176,7 +193,7 @@ describe('decision grading', () => {
       board: 'As 9h 4c 5s Jd',
       snapshots: [snap({ action: { kind: 'fold', amount: 0 }, street: 'river', board: cards('As 9h 4c 5s Jd'), potBefore: 100, betFaced: 0, amountPutIn: 0, currentBet: 0 })],
     });
-    const [g] = gradeHand(r, rng());
+    const [g] = gradeHand(r);
     expect(g?.note.toLowerCase()).toContain('for free');
   });
 });
@@ -243,7 +260,7 @@ describe('analyzeHand', () => {
     const a = analyzeHand(r);
     expect(a.grades).toHaveLength(1);
     expect(a.leaks.length).toBeGreaterThan(0);
-    expect(a.equityLine[0]?.equity).toBe(0);
+    expect(a.equityLine[0]?.equity).toBeLessThan(0.3); // hand strength (high card), not vs their cards
     expect(a.summary.length).toBeGreaterThan(0);
     // Deterministic: same input → same summary.
     expect(analyzeHand(r).summary).toBe(a.summary);
