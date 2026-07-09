@@ -81,3 +81,9 @@
 .seat__cards .card:nth-child(1) { transform: rotate(-4deg); }
 .seat__cards .card:nth-child(2) { transform: rotate(4deg); }
 .seat__cards .card.card--win    { transform: translateY(-6px); }
+
+/* The hero's own cards are face-up every hand — keep them upright and give them
+   a small gap (instead of the fanned overlap) so both are easy to read. */
+.seat--you .seat__cards .card { transform: none; }
+.seat--you .seat__cards .card + .card { margin-left: 6px; }
+.seat--you .seat__cards .card.card--win { transform: translateY(-6px); }

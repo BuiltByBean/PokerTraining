@@ -74,6 +74,10 @@ const BB = 2;
 const BOT_THINK_MIN = 550;
 const BOT_THINK_MAX = 1050;
 const BUBBLE_LINGER_MS = 1500;
+// Bots exploit the human's reads at full strength regardless of difficulty —
+// the slider changes how well they play, not whether they target your leaks.
+// (Still gated inside the bot by read confidence, so it needs a real sample.)
+const EXPLOIT_INTENSITY = 1;
 
 const stage = document.getElementById('stage') as HTMLElement;
 const recordEl = document.getElementById('record') as HTMLElement;
@@ -238,14 +242,9 @@ function botAction(playerId: string): Action {
     rng: app.rng,
     skill,
     read: app.playerRead,
-    exploit: exploitIntensity(app.config.difficulty),
+    exploit: EXPLOIT_INTENSITY,
     archetype: persona.archetype,
   });
-}
-
-/** How hard bots exploit history, ramped by difficulty (off at ≤2, full at 10). */
-function exploitIntensity(difficulty: number): number {
-  return Math.max(0, Math.min(1, (difficulty - 2) / 8));
 }
 
 function applyAction(playerId: string, action: Action): void {
